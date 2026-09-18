@@ -1,0 +1,31 @@
+﻿# === BẢO MẬT ===
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Data & DB
+data/trades.db
+data/*.csv
+data/pipeline_run_*.txt
+
+# Charts
+charts/*.png
+charts/*.jpg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs & envs
+*.log
+venv/
+.venv/
+
