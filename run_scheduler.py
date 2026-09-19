@@ -1,4 +1,4 @@
-﻿"""
+"""
 run_scheduler.py — Chạy pipeline tự động theo lịch
 ────────────────────────────────────────────────────────────────
 Cài đặt: pip install schedule
@@ -38,9 +38,11 @@ def run_pipeline_job():
     print(f"⏰ SCHEDULER: Bắt đầu pipeline lúc {datetime.now().strftime('%H:%M:%S')}")
     print(f"{'='*60}")
 
-    report_path = find_latest_report(directory=REPORTS_DIR, symbol=SYMBOL)
+    # Bỏ chữ 'm' ở cuối (ví dụ BTCUSDm -> BTCUSD) để tìm đúng file report từ TradingAgents
+    search_symbol = SYMBOL[:-1] if SYMBOL.endswith('m') else SYMBOL
+    report_path = find_latest_report(directory=REPORTS_DIR, symbol=search_symbol)
     if not report_path:
-        print(f"[Scheduler] ⚠️  Không tìm thấy report cho {SYMBOL}. Bỏ qua lần này.")
+        print(f"[Scheduler] ⚠️  Không tìm thấy report cho {search_symbol}. Bỏ qua lần này.")
         return
 
     try:

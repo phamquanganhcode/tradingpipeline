@@ -27,7 +27,7 @@ TELEGRAM_CHAT_ID    = os.getenv("TELEGRAM_CHAT_ID", "")
 # ─────────────────────────────────────────────
 # SYMBOL & TIMEFRAME
 # ─────────────────────────────────────────────
-SYMBOL     = "BTCUSD"
+SYMBOL     = os.getenv("TRADING_SYMBOL", "BTCUSD")
 TIMEFRAMES = ["D1", "H4", "H1", "M15"]   # khung dùng để tính indicator bổ sung
 
 # ─────────────────────────────────────────────

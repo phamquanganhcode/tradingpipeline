@@ -145,7 +145,7 @@ def run_pipeline(report_path: str, account_balance: float = 10_000.0) -> dict:
             
             # Thực thi
             mt5_bot.execute_trade(
-                symbol=proposal.symbol,
+                symbol=SYMBOL,  # Dùng SYMBOL từ config (ví dụ BTCUSDm) để đúng với mã sàn MT5
                 decision=mt5_decision,
                 entry_type=entry_type,
                 entry_price=ep,
@@ -310,9 +310,10 @@ def main():
     # Tìm report
     report_path = args.report
     if not report_path:
-        report_path = find_latest_report(directory=REPORTS_DIR, symbol=args.symbol)
+        search_sym = args.symbol[:-1] if args.symbol.endswith('m') else args.symbol
+        report_path = find_latest_report(REPORTS_DIR, search_sym)
         if not report_path:
-            print(f"❌ Không tìm thấy file complete_report_{args.symbol}*.md trong {REPORTS_DIR}")
+            print(f"❌ Không tìm thấy report nào cho {search_sym} trong {REPORTS_DIR}")
             sys.exit(1)
         print(f"[main] Tự động chọn report: {report_path}")
 
