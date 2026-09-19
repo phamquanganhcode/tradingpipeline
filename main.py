@@ -134,12 +134,19 @@ def run_pipeline(report_path: str, account_balance: float = 10_000.0) -> dict:
             # Lấy thông số lệnh
             ep = proposal.entry.price or proposal.entry.zone_low
             tp = proposal.take_profit[0] if proposal.take_profit else 0.0
-            entry_type = proposal.entry.type # market, limit, stop
+            entry_type = proposal.entry.type  # market, limit, stop
+
+            # Khi AI quyết định WAIT nhưng có pending setup được ACCEPT,
+            # dùng direction từ entry zone (buy/sell) thay vì "WAIT"
+            mt5_decision = proposal.decision
+            if mt5_decision == "WAIT" and proposal.entry:
+                mt5_decision = proposal.entry.direction.upper()  # "BUY" hoặc "SELL"
+                print(f"[MT5] ℹ️  WAIT→Pending: đặt lệnh {entry_type.upper()} {mt5_decision}")
             
             # Thực thi
             mt5_bot.execute_trade(
                 symbol=proposal.symbol,
-                decision=proposal.decision,
+                decision=mt5_decision,
                 entry_type=entry_type,
                 entry_price=ep,
                 sl=proposal.stop_loss,
@@ -152,17 +159,22 @@ def run_pipeline(report_path: str, account_balance: float = 10_000.0) -> dict:
 
     # ── SUMMARY ───────────────────────────────────────────────
     elapsed = round(time.time() - start, 1)
+    is_accepted_pending = (proposal.decision == "WAIT" and validation.status == "ACCEPT")
     print(f"\n{'='*60}")
     print(f"  PIPELINE HOÀN TẤT  ({elapsed}s) — Trade ID #{trade_id}")
     print(f"{'='*60}")
     print(f"  Symbol    : {proposal.symbol}")
-    print(f"  Decision  : {proposal.decision}")
+    if is_accepted_pending:
+        print(f"  Decision  : WAIT → ✅ PENDING ORDER ACCEPTED")
+    else:
+        print(f"  Decision  : {proposal.decision}")
     print(f"  Bias      : {proposal.bias}")
     conf = proposal.confidence
     conf_display = f"{conf:.0%}" if conf <= 1.0 else f"{conf}%"
     print(f"  Confidence: {conf_display}")
     if proposal.decision == "WAIT" and proposal.entry:
-        print(f"  [PENDING SETUP ĐỀ XUẤT]")
+        label = "✅ PENDING ORDER ĐÃ ĐẶT" if is_accepted_pending else "PENDING SETUP ĐỀ XUẤT"
+        print(f"  [{label}]")
         ep = proposal.entry.price or proposal.entry.zone_low
         dir_str = proposal.entry.direction.upper()
         print(f"  Entry     : {ep} ({dir_str} {proposal.entry.type.upper()})")

@@ -23,20 +23,26 @@ from config import (
 # PIP VALUE TABLE (USD per 1 lot per pip, xấp xỉ)
 # ─────────────────────────────────────────────────────────────
 PIP_VALUE_PER_LOT = {
-    "XAGUSD": 50.0,    # Silver: $50 / lot / pip (contract 5000 oz)
-    "XAUUSD": 10.0,    # Gold:   $10 / lot / pip (contract 100 oz)
-    "EURUSD": 10.0,    # $10 / lot / pip
-    "GBPUSD": 10.0,
-    "USDJPY": 9.1,
+    "XAGUSD":  50.0,    # Silver: $50 / lot / pip (contract 5000 oz)
+    "XAUUSD":  10.0,    # Gold:   $10 / lot / pip (contract 100 oz)
+    "XAUUSDm": 1.0,     # Gold micro (Exness): $1 / lot / pip (contract 10 oz)
+    "BTCUSD":  1.0,     # Bitcoin: $1 / lot / pip (1 lot = 1 BTC, pip = $1)
+    "BTCUSDm": 0.01,    # Bitcoin micro (Exness): $0.01 / lot / pip (1 lot = 0.01 BTC)
+    "EURUSD":  10.0,    # $10 / lot / pip
+    "GBPUSD":  10.0,
+    "USDJPY":  9.1,
     "DEFAULT": 10.0,
 }
 
 PIP_SIZE = {
-    "XAGUSD": 0.001,   # Silver tính theo 0.001
-    "XAUUSD": 0.10,
-    "EURUSD": 0.0001,
-    "GBPUSD": 0.0001,
-    "USDJPY": 0.01,
+    "XAGUSD":  0.001,   # Silver tính theo 0.001
+    "XAUUSD":  0.10,    # Gold: 1 pip = $0.10
+    "XAUUSDm": 0.10,    # Gold micro: cùng pip size với XAUUSD
+    "BTCUSD":  1.0,     # Bitcoin: 1 pip = $1
+    "BTCUSDm": 1.0,     # Bitcoin micro: cùng pip size
+    "EURUSD":  0.0001,
+    "GBPUSD":  0.0001,
+    "USDJPY":  0.01,
     "DEFAULT": 0.0001,
 }
 
@@ -73,10 +79,25 @@ class RiskValidator:
 
     # ── Check functions ───────────────────────────────────────
 
+    def _has_pending_setup(self) -> bool:
+        """Kiểm tra xem proposal WAIT có đủ thông số cho pending order không."""
+        p = self.proposal
+        if p.entry is None or p.stop_loss is None or not p.take_profit:
+            return False
+        entry_price = p.entry.price or p.entry.zone_low
+        return entry_price is not None
+
     def _check_decision(self) -> str | None:
-        """Nếu AI đã WAIT, không cần validate thêm."""
+        """
+        Xử lý logic WAIT:
+        - WAIT + KHÔNG có entry/SL/TP → REJECT ngay (không có gì để làm)
+        - WAIT + CÓ đủ entry/SL/TP    → tiếp tục validate như pending order
+        """
         if self.proposal.decision == "WAIT":
-            return "AI đã quyết định WAIT — không có setup khả dụng"
+            if not self._has_pending_setup():
+                return "AI đã quyết định WAIT và không đề xuất pending setup"
+            # Có pending setup → cho qua, validate bình thường
+            print("[RiskValidator] ℹ️  WAIT + Pending Setup được phát hiện — tiếp tục validate...")
         return None
 
     def _check_news(self) -> str | None:
@@ -102,10 +123,15 @@ class RiskValidator:
         if entry_price is None:
             return "Entry price không xác định"
 
+        # Xác định direction của lệnh (BUY/SELL hoặc từ entry.direction khi WAIT)
+        direction = self.proposal.decision
+        if direction == "WAIT":
+            direction = (p.entry.direction or "buy").upper()
+
         # SL phải đúng chiều với lệnh
-        if p.decision == "BUY"  and p.stop_loss >= entry_price:
+        if direction == "BUY"  and p.stop_loss >= entry_price:
             return f"SL ({p.stop_loss}) phải NHỎ HƠN entry ({entry_price}) cho lệnh BUY"
-        if p.decision == "SELL" and p.stop_loss <= entry_price:
+        if direction == "SELL" and p.stop_loss <= entry_price:
             return f"SL ({p.stop_loss}) phải LỚN HƠN entry ({entry_price}) cho lệnh SELL"
 
         return None
@@ -131,8 +157,10 @@ class RiskValidator:
         return None
 
     def _check_no_trade_zone(self) -> str | None:
-        """Kiểm tra thị trường có đang trong No-Trade Zone không."""
-        if self.report.market_structure.no_trade_zone and self.proposal.decision != "WAIT":
+        """Kiểm tra thị trường có đang trong No-Trade Zone không.
+        Với WAIT + pending setup: cho phép đặt lệnh chờ breakout (Stop order)."""
+        p = self.proposal
+        if self.report.market_structure.no_trade_zone and p.decision not in ("WAIT",):
             return "Thị trường đang trong No-Trade Zone (BB phẳng / EMA xoắn)"
         return None
 
@@ -140,9 +168,15 @@ class RiskValidator:
         """Nếu có BOS và lệnh ngược xu hướng cũ → cảnh báo."""
         ms = self.report.market_structure
         p  = self.proposal
-        if ms.bos_signal and p.decision == "BUY" and ms.trend == "bearish":
+
+        # Lấy direction thực sự (kể cả khi là WAIT pending)
+        direction = p.decision
+        if direction == "WAIT" and p.entry:
+            direction = (p.entry.direction or "buy").upper()
+
+        if ms.bos_signal and direction == "BUY" and ms.trend == "bearish":
             return "Break of Structure xuất hiện trong downtrend — không BUY theo nguyên tắc"
-        if ms.bos_signal and p.decision == "SELL" and ms.trend == "bullish":
+        if ms.bos_signal and direction == "SELL" and ms.trend == "bullish":
             return "Break of Structure xuất hiện trong uptrend — không SELL theo nguyên tắc"
         return None
 
@@ -200,8 +234,18 @@ class RiskValidator:
     # ── Public API ────────────────────────────────────────────
 
     def validate(self) -> ValidationResult:
-        """Chạy toàn bộ validation và trả về ValidationResult."""
-        print(f"[RiskValidator] Đang validate proposal: {self.proposal.decision}")
+        """Chạy toàn bộ validation và trả về ValidationResult.
+
+        Logic WAIT:
+          - WAIT + không có pending setup → REJECT luôn (giữ nguyên hành vi cũ)
+          - WAIT + có đủ entry/SL/TP     → validate đầy đủ như BUY/SELL
+            → nếu pass tất cả → ACCEPT (đặt pending order)
+        """
+        is_pending = (self.proposal.decision == "WAIT" and self._has_pending_setup())
+        print(
+            f"[RiskValidator] Đang validate proposal: {self.proposal.decision}"
+            + (" (Pending Setup)" if is_pending else "")
+        )
 
         # --- Chạy các checks theo thứ tự ưu tiên ---
         checks = [
@@ -222,7 +266,7 @@ class RiskValidator:
                 print(f"[RiskValidator] ❌ REJECT — [{check_name}] {reason}")
                 break
 
-        # --- Tính toán Lot Size & R:R (Kể cả khi REJECT để tham khảo cho Pending Order) ---
+        # --- Tính toán Lot Size & R:R (Kể cả khi REJECT để tham khảo) ---
         actual_rr = self._calculate_rr()
         sl_pips   = self._calculate_sl_pips()
         lot_size  = self._calculate_lot_size(sl_pips) if sl_pips else None
@@ -244,8 +288,9 @@ class RiskValidator:
             )
 
         # --- ACCEPT ---
+        label = "PENDING ORDER" if is_pending else "DIRECT ORDER"
         print(
-            f"[RiskValidator] ✅ ACCEPT — "
+            f"[RiskValidator] ✅ ACCEPT ({label}) — "
             f"SL={sl_pips} pips | Lot={lot_size} | R:R={actual_rr} | Risk=~${risk_usd:.2f}"
         )
         return ValidationResult(
@@ -255,3 +300,4 @@ class RiskValidator:
             actual_rr         = actual_rr,
             risk_amount_usd   = round(risk_usd, 2),
         )
+

@@ -1,4 +1,4 @@
-﻿"""
+"""
 modules/indicator_engine.py
 ────────────────────────────────────────────────────────────────
 Tính toán bổ sung EMA 20/50, Bollinger Bands, ATR, RSI,
@@ -29,12 +29,14 @@ warnings.filterwarnings("ignore")
 # SYMBOL MAPPING (TradingAgents → Twelve Data)
 # ─────────────────────────────────────────────────────────────
 SYMBOL_MAP = {
-    "XAGUSD": "XAG/USD",
-    "XAUUSD": "XAU/USD",
-    "EURUSD": "EUR/USD",
-    "GBPUSD": "GBP/USD",
-    "USDJPY": "USD/JPY",
-    "BTCUSD": "BTC/USD",
+    "XAGUSD":  "XAG/USD",
+    "XAUUSD":  "XAU/USD",
+    "XAUUSDm": "XAU/USD",   # Exness micro → same Twelve Data symbol
+    "EURUSD":  "EUR/USD",
+    "GBPUSD":  "GBP/USD",
+    "USDJPY":  "USD/JPY",
+    "BTCUSD":  "BTC/USD",
+    "BTCUSDm": "BTC/USD",   # Exness micro → same Twelve Data symbol
 }
 
 # Twelve Data interval mapping

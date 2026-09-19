@@ -18,7 +18,7 @@ except ImportError:
 # API KEYS (đọc từ .env hoặc biến môi trường)
 # ─────────────────────────────────────────────
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL        = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+GEMINI_MODEL        = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 TWELVEDATA_API_KEY  = os.getenv("TWELVEDATA_API_KEY", "")
 TELEGRAM_BOT_TOKEN  = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID    = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -27,7 +27,7 @@ TELEGRAM_CHAT_ID    = os.getenv("TELEGRAM_CHAT_ID", "")
 # ─────────────────────────────────────────────
 # SYMBOL & TIMEFRAME
 # ─────────────────────────────────────────────
-SYMBOL     = "XAUUSDm"
+SYMBOL     = "BTCUSD"
 TIMEFRAMES = ["D1", "H4", "H1", "M15"]   # khung dùng để tính indicator bổ sung
 
 # ─────────────────────────────────────────────

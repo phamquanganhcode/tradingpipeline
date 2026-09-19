@@ -1,4 +1,4 @@
-﻿"""
+"""
 modules/gemini_client.py
 ────────────────────────────────────────────────────────────────
 Gọi Gemini API với Structured Output và parse kết quả
@@ -199,6 +199,11 @@ class GeminiClient:
                 price     = entry_d.get("price"),
             )
 
+        # Normalize confidence: Gemini đôi khi trả về 65 thay vì 0.65
+        raw_conf = data.get("confidence", 0.0)
+        if isinstance(raw_conf, (int, float)) and raw_conf > 1.0:
+            raw_conf = raw_conf / 100.0
+
         proposal = TradeProposal(
             thought_process=ThoughtProcess(
                 market_context   = tp_data.get("market_context", ""),
@@ -219,7 +224,7 @@ class GeminiClient:
             stop_loss    = data.get("stop_loss"),
             take_profit  = tps,
             risk_reward  = data.get("risk_reward"),
-            confidence   = data.get("confidence", 0.0),
+            confidence   = raw_conf,
             invalidation = data.get("invalidation", ""),
             reasons      = data.get("reasons", []),
             risks        = data.get("risks", []),
