@@ -1,7 +1,10 @@
-﻿@echo off
+@echo off
 title AI Trading Pipeline - BTCUSDm (24/7 Crypto)
 chcp 65001 >nul
 color 0B
+
+:: Chuyen vao thu muc chua file bat
+cd /d "%~dp0"
 
 echo ==============================================================================
 echo    AI TRADING PIPELINE - 24/7 CRYPTO MODE
@@ -14,6 +17,8 @@ echo ===========================================================================
 echo.
 
 set TRADING_SYMBOL=BTCUSDm
+set PYTHONIOENCODING=utf-8
+set PYTHONUTF8=1
 python run_scheduler.py
 
 pause

@@ -12,6 +12,7 @@ Chức năng:
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import datetime, date
 from typing import Optional
@@ -34,6 +35,11 @@ class TradeMonitor:
 
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
+        # Đảm bảo thư mục chứa database tồn tại
+        os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
+        # Đảm bảo bảng trades cơ sở đã tồn tại trước khi chạy migrations
+        from modules.trade_logger import TradeLogger
+        TradeLogger(self.db_path)
         self._ensure_monitor_columns()
 
     def _ensure_monitor_columns(self):

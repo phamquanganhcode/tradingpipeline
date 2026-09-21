@@ -4,7 +4,16 @@ API Keys được đọc từ file .env (bảo mật hơn hardcode)
 """
 
 import os
+import sys
 from pathlib import Path
+
+# Đảm bảo UTF-8 cho console trên Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 # Tự động load file .env nếu có thư viện python-dotenv
 try:
@@ -47,8 +56,9 @@ if not _default_reports.exists():
     # Fallback to local D: path if running standalone
     _default_reports = Path(r"D:\TradingAgentsv2\reports")
 REPORTS_DIR = os.getenv("REPORTS_DIR", str(_default_reports))
-CHARTS_DIR  = "charts"
-DB_PATH     = "data/trades.db"
+BASE_DIR    = Path(__file__).resolve().parent
+CHARTS_DIR  = str(BASE_DIR / "charts")
+DB_PATH     = str(BASE_DIR / "data" / "trades.db")
 
 # ─────────────────────────────────────────────
 # INDICATOR SETTINGS (phải khớp với Trading_System_Pro.md)
