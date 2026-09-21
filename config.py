@@ -33,11 +33,11 @@ TIMEFRAMES = ["D1", "H4", "H1", "M15"]   # khung dùng để tính indicator b�
 # ─────────────────────────────────────────────
 # RISK MANAGEMENT
 # ─────────────────────────────────────────────
-RISK_PER_TRADE_PCT  = 2      # % tài khoản rủi ro mỗi lệnh
+RISK_PER_TRADE_PCT  = float(os.getenv("RISK_PER_TRADE_PCT", "1.5"))  # % tài khoản rủi ro mỗi lệnh
 MINIMUM_RR          = 1.3    # R:R tối thiểu để chấp nhận setup
 MAX_SPREAD_PIPS     = 5.0    # spread tối đa cho phép (pips)
 NEWS_BLOCK_MINUTES  = 30     # chặn giao dịch ±30 phút quanh tin tức high-impact
-MAX_TRADES_PER_DAY  = 3
+MAX_TRADES_PER_DAY  = int(os.getenv("MAX_TRADES_PER_DAY", "10"))      # số lệnh tối đa mỗi ngày
 
 # ─────────────────────────────────────────────
 # PATHS
