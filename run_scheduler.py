@@ -75,14 +75,18 @@ def main():
 ╚══════════════════════════════════════════════════════════════╝
 """)
 
+    run_minute = os.getenv("PIPELINE_RUN_MINUTE", ":05")
+    if not run_minute.startswith(":"):
+        run_minute = f":{run_minute.zfill(2)}"
+
     # Lịch chạy
-    schedule.every().hour.at(":01").do(run_pipeline_job)
+    schedule.every().hour.at(run_minute).do(run_pipeline_job)
     schedule.every(5).minutes.do(run_monitor_job)
 
     print(f"[Scheduler] ✅ Đã thiết lập lịch:")
-    print(f"  - Pipeline: phút :01 của mỗi giờ")
+    print(f"  - Pipeline: phút {run_minute} của mỗi giờ")
     print(f"  - Monitor : mỗi 5 phút")
-    print(f"[Scheduler] Đang chờ... (lần chạy pipeline tiếp theo: phút :01)\n")
+    print(f"[Scheduler] Đang chờ... (lần chạy pipeline tiếp theo: phút {run_minute})\n")
 
     # Chạy monitor ngay lập tức khi khởi động
     run_monitor_job()

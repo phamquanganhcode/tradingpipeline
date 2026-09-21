@@ -313,9 +313,28 @@ class ReportParser:
 # ─────────────────────────────────────────────────────────────
 
 def find_latest_report(directory: str = ".", symbol: Optional[str] = None) -> Optional[str]:
-    """Tìm file complete_report_*.md mới nhất trong thư mục (kể cả thư mục con)."""
-    pattern = os.path.join(directory, "**", f"complete_report_{symbol or '*'}*.md")
-    files = glob.glob(pattern, recursive=True)
+    """Tìm file complete_report_*.md mới nhất trong thư mục (kể cả thư mục con).
+    Tự động hỗ trợ cả định dạng có dấu gạch nối (ví dụ: BTC-USD) và không dấu (BTCUSD).
+    """
+    patterns = []
+    if symbol:
+        clean = symbol.replace("-", "")
+        # Nếu symbol có dạng 6 ký tự như BTCUSD, tìm cả BTCUSD và BTC-USD
+        if len(clean) == 6:
+            patterns.append(os.path.join(directory, "**", f"complete_report_{clean}*.md"))
+            patterns.append(os.path.join(directory, "**", f"complete_report_{clean[:3]}-{clean[3:]}*.md"))
+        else:
+            patterns.append(os.path.join(directory, "**", f"complete_report_{symbol}*.md"))
+            patterns.append(os.path.join(directory, "**", f"complete_report_{clean}*.md"))
+    else:
+        patterns.append(os.path.join(directory, "**", "complete_report_*.md"))
+
+    files = []
+    for pat in patterns:
+        files.extend(glob.glob(pat, recursive=True))
+
+    # Loại bỏ file trùng lặp nếu có
+    files = list(set(files))
     if not files:
         return None
     return max(files, key=os.path.getmtime)

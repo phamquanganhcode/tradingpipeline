@@ -42,7 +42,11 @@ MAX_TRADES_PER_DAY  = int(os.getenv("MAX_TRADES_PER_DAY", "10"))      # số l�
 # ─────────────────────────────────────────────
 # PATHS
 # ─────────────────────────────────────────────
-REPORTS_DIR = r"D:\TradingAgentsv2\reports"            # thư mục chứa file report từ TradingAgents
+_default_reports = Path(__file__).resolve().parent.parent / "TradingAgentsv2" / "reports"
+if not _default_reports.exists():
+    # Fallback to local D: path if running standalone
+    _default_reports = Path(r"D:\TradingAgentsv2\reports")
+REPORTS_DIR = os.getenv("REPORTS_DIR", str(_default_reports))
 CHARTS_DIR  = "charts"
 DB_PATH     = "data/trades.db"
 
