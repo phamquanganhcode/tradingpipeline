@@ -78,12 +78,12 @@ def main():
     print("""
 ╔══════════════════════════════════════════════════════════════╗
 ║          AI TRADING PIPELINE — AUTO SCHEDULER                ║
-║   Pipeline: mỗi giờ lúc :01 | Monitor: mỗi 5 phút          ║
+║   Pipeline: mỗi giờ lúc :15 | Monitor: mỗi 5 phút          ║
 ║   Nhấn Ctrl+C để dừng                                       ║
 ╚══════════════════════════════════════════════════════════════╝
 """)
 
-    run_minute = os.getenv("PIPELINE_RUN_MINUTE", ":05")
+    run_minute = os.getenv("PIPELINE_RUN_MINUTE", ":15")
     if not run_minute.startswith(":"):
         run_minute = f":{run_minute.zfill(2)}"
 
