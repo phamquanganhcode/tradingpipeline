@@ -1,25 +1,49 @@
 @echo off
-title AI Trading Pipeline - XAUUSDm (24/5 Gold)
-chcp 65001 >nul
+chcp 65001 > nul
+title AI Trading Bot 24/5 - XAUUSDm (Gold)
 color 0E
 
-:: Chuyen vao thu muc chua file bat
+:: Chuyen vao thu muc chua file bat nay
 cd /d "%~dp0"
 
-echo ==============================================================================
-echo    AI TRADING PIPELINE - 24/5 GOLD (XAUUSDm) MODE
-echo ==============================================================================
-echo  - Symbol MT5: XAUUSDm (Vang / Gold)
-echo  - Tim kiem Report: XAUUSD hoac XAU-USD
-echo  - Scheduler: Chay tin hieu moi dau gio luc :15, Monitor moi 5 phut
-echo  - Bam Ctrl+C de dung
-echo ==============================================================================
+:RESTART_LOOP
+cls
+echo.
+echo  +============================================================+
+echo  ^|         AI TRADING BOT 24/5 - XAUUSDm (GOLD)               ^|
+echo  ^|     Chay tu dong: Sang Thu 2 den Dem Thu 6                ^|
+echo  ^|     Tin hieu: Phut :15 moi gio ^| Monitor: Moi 5 phut      ^|
+echo  +============================================================+
+echo.
+echo  Thu muc: %CD%
+echo  Thoi gian bat dau: %DATE% %TIME%
+echo  -------------------------------------------------------------
 echo.
 
+:: Kiem tra Python
+where python > nul 2>&1
+if errorlevel 1 (
+    color 0C
+    echo  [LOI] Khong tim thay Python! Hay cai Python va thu lai.
+    pause
+    exit /b 1
+)
+
+:: Thiet lap moi truong
 set TRADING_SYMBOL=XAUUSDm
 set PIPELINE_RUN_MINUTE=:15
 set PYTHONIOENCODING=utf-8
 set PYTHONUTF8=1
+
+:: Chay Auto Scheduler
 python run_scheduler.py
 
-pause
+:: Neu chuong trinh bi ngat dot ngot, tu dong khoi dong lai
+color 0C
+echo.
+echo  -------------------------------------------------------------
+echo  [CANH BAO] Bot vua bi ngung hoac xay ra loi!
+echo  Tu dong khoi dong lai sau 5 giay... (Nhan Ctrl+C de huy)
+timeout /t 5 /nobreak > nul
+
+goto RESTART_LOOP
