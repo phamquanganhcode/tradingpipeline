@@ -110,30 +110,79 @@ def connect_mt5(verbose=True):
     return True
 
 
+def find_available_symbols(keyword: str = "") -> list[str]:
+    """Tìm danh sách mã có trên sàn theo từ khóa."""
+    all_syms = mt5.symbols_get()
+    if not all_syms:
+        return []
+    if not keyword:
+        return [s.name for s in all_syms]
+    kw = keyword.upper().strip()
+    return [s.name for s in all_syms if kw in s.name.upper()]
+
+
+def resolve_symbol(symbol: str):
+    """Tự động tìm mã chính xác trên sàn MT5 (không phân biệt hoa/thường, đuôi m/c)."""
+    # Các biến thể có thể có của mã
+    candidates = [
+        symbol,
+        symbol.upper(),
+        symbol.lower(),
+        symbol.rstrip("m").rstrip("M"),
+        f"{symbol.rstrip('m').rstrip('M')}m",
+        f"{symbol.rstrip('m').rstrip('M')}c",
+        f"{symbol.rstrip('m').rstrip('M')}.pro",
+        f"{symbol.rstrip('m').rstrip('M')}#",
+    ]
+    # Thêm biến thể đặc thù cho BTC và Gold
+    sym_upper = symbol.upper()
+    if "BTC" in sym_upper:
+        candidates.extend(["BTCUSD", "BTCUSDm", "BTCUSDT", "BTC/USD", "XBTUSD"])
+    elif "XAU" in sym_upper or "GOLD" in sym_upper:
+        candidates.extend(["XAUUSD", "XAUUSDm", "GOLD", "GOLDm", "XAU/USD"])
+
+    for cand in candidates:
+        info = mt5.symbol_info(cand)
+        if info is not None:
+            mt5.symbol_select(cand, True)
+            tick = mt5.symbol_info_tick(cand)
+            if tick is not None:
+                return cand, info, tick
+
+    # Không khớp trực tiếp, quét toàn sàn tìm mã tương tự
+    kw = "BTC" if "BTC" in sym_upper else ("XAU" if "XAU" in sym_upper or "GOLD" in sym_upper else sym_upper[:3])
+    matches = find_available_symbols(kw)
+    return None, matches, None
+
+
 def check_symbol_info(symbol: str):
-    if not mt5.symbol_select(symbol, True):
-        print(f"\n[LỖI] Không tìm thấy hoặc không thể kích hoạt mã '{symbol}' trong Market Watch.")
-        print("💡 Hãy kiểm tra lại mã chính xác trên sàn của bạn (VD: BTCUSDm, XAUUSDm, BTCUSD, EURUSD,...)")
+    actual_sym, info, tick = resolve_symbol(symbol)
+    if actual_sym is None:
+        matches = info  # danh sách các mã gợi ý
+        print(f"\n[LỖI] Không tìm thấy mã '{symbol}' trên sàn MT5.")
+        if matches:
+            print(f"💡 GỢI Ý CÁC MÃ CÓ TRÊN SÀN CỦA BẠN:")
+            for i, name in enumerate(matches[:15], 1):
+                print(f"   [{i}] {name}")
+            print(f"👉 Hãy chọn mục 6 và nhập chính xác một trong các tên mã trên.")
+        else:
+            print("💡 Hãy chọn mục 7 để tìm kiếm tên mã có sẵn trên sàn của bạn.")
         return None
 
-    info = mt5.symbol_info(symbol)
-    tick = mt5.symbol_info_tick(symbol)
-
-    if info is None or tick is None:
-        print(f"\n[LỖI] Không thể đọc giá của mã '{symbol}'.")
-        return None
+    if actual_sym != symbol:
+        print(f"[MT5] ℹ️  Tự động nhận diện mã trên sàn: '{symbol}' -> '{actual_sym}'")
 
     spread = (tick.ask - tick.bid)
     digits = info.digits
 
-    print(f"\n📊 THÔNG TIN MÃ GIAO DỊCH: [{symbol}]")
+    print(f"\n📊 THÔNG TIN MÃ GIAO DỊCH: [{actual_sym}]")
     print(f"  - Giá Bid         : {tick.bid:.{digits}f}")
     print(f"  - Giá Ask         : {tick.ask:.{digits}f}")
     print(f"  - Chênh lệch giá  : {spread:.{digits}f} (Spread: {info.spread} points)")
     print(f"  - Volume tối thiểu: {info.volume_min} lot")
     print(f"  - Volume tối đa   : {info.volume_max} lot")
     print(f"  - Bước nhảy volume: {info.volume_step} lot")
-    return info, tick
+    return actual_sym, info, tick
 
 
 def get_safe_filling(symbol_info):
@@ -147,13 +196,13 @@ def get_safe_filling(symbol_info):
 
 
 def test_pending_order(symbol: str):
-    print(f"\n--- ⏳ THỬ ĐẶT LỆNH CHỜ (PENDING BUY LIMIT) AN TOÀN TRÊN [{symbol}] ---")
-    print("Mục đích: Kiểm tra khả năng gửi lệnh lên sàn mà KHÔNG sợ khớp ngay.")
-
     res = check_symbol_info(symbol)
     if not res:
         return
-    info, tick = res
+    actual_symbol, info, tick = res
+
+    print(f"\n--- ⏳ THỬ ĐẶT LỆNH CHỜ (PENDING BUY LIMIT) AN TOÀN TRÊN [{actual_symbol}] ---")
+    print("Mục đích: Kiểm tra khả năng gửi lệnh lên sàn mà KHÔNG sợ khớp ngay.")
 
     # Đặt giá BUY LIMIT thấp hơn giá thị trường 3% (để không bao giờ khớp ngay)
     digits = info.digits
@@ -174,7 +223,7 @@ def test_pending_order(symbol: str):
 
     request = {
         "action": mt5.TRADE_ACTION_PENDING,
-        "symbol": symbol,
+        "symbol": actual_symbol,
         "volume": float(lot_size),
         "type": mt5.ORDER_TYPE_BUY_LIMIT,
         "price": float(limit_price),
@@ -227,7 +276,12 @@ def test_pending_order(symbol: str):
 
 
 def test_market_order(symbol: str):
-    print(f"\n--- ⚡ THỬ ĐẶT LỆNH TRỰC TIẾP (MARKET BUY) TRÊN [{symbol}] ---")
+    res = check_symbol_info(symbol)
+    if not res:
+        return
+    actual_symbol, info, tick = res
+
+    print(f"\n--- ⚡ THỬ ĐẶT LỆNH TRỰC TIẾP (MARKET BUY) TRÊN [{actual_symbol}] ---")
     print("⚠️  CẢNH BÁO: Lệnh này sẽ KHỚP NGAY LẬP TỨC trên tài khoản của bạn!")
     acc_info = mt5.account_info()
     if acc_info and acc_info.trade_mode != mt5.ACCOUNT_TRADE_MODE_DEMO:
@@ -237,11 +291,6 @@ def test_market_order(symbol: str):
     if confirm != "ok":
         print("❌ Đã hủy thao tác.")
         return
-
-    res = check_symbol_info(symbol)
-    if not res:
-        return
-    info, tick = res
 
     digits = info.digits
     lot_size = info.volume_min
@@ -382,14 +431,17 @@ def main():
         print("4. Thử đặt LỆNH TRỰC TIẾP (Market Buy) - [Khớp ngay, có hỏi xác nhận]")
         print("5. Dọn dẹp / Hủy tất cả các lệnh test vừa tạo")
         print("6. Đổi mã giao dịch khác (VD: BTCUSDm, XAUUSDm, EURUSD,...)")
+        print("7. Tìm kiếm mã có trên sàn MT5 (Gõ từ khóa như btc, xau, gold...)")
         print("0. Thoát")
 
-        choice = input("\n👉 Hãy chọn chức năng (0-6): ").strip()
+        choice = input("\n👉 Hãy chọn chức năng (0-7): ").strip()
 
         if choice == "1":
             connect_mt5(verbose=True)
         elif choice == "2":
-            check_symbol_info(symbol)
+            res = check_symbol_info(symbol)
+            if res and res[0] != symbol:
+                symbol = res[0]
         elif choice == "3":
             test_pending_order(symbol)
         elif choice == "4":
@@ -399,15 +451,35 @@ def main():
         elif choice == "6":
             new_sym = input(f"Nhập mã mới (hiện tại: {symbol}): ").strip()
             if new_sym:
-                symbol = new_sym
-                check_symbol_info(symbol)
+                res = check_symbol_info(new_sym)
+                if res:
+                    symbol = res[0]
+                else:
+                    symbol = new_sym
+        elif choice == "7":
+            kw = input("\nNhập từ khóa tìm kiếm (VD: btc, gold, xau, usd...): ").strip()
+            if kw:
+                matches = find_available_symbols(kw)
+                if matches:
+                    print(f"\n🔍 Tìm thấy {len(matches)} mã phù hợp trên sàn MT5:")
+                    for i, name in enumerate(matches[:25], 1):
+                        print(f"  [{i}] {name}")
+                    pick = input("\nNhập tên mã hoặc số thứ tự để chọn làm mã kiểm tra (Enter để bỏ qua): ").strip()
+                    if pick.isdigit() and 1 <= int(pick) <= len(matches[:25]):
+                        symbol = matches[int(pick) - 1]
+                        check_symbol_info(symbol)
+                    elif pick:
+                        symbol = pick
+                        check_symbol_info(symbol)
+                else:
+                    print(f"❌ Không tìm thấy mã nào chứa '{kw}' trên sàn.")
         elif choice == "0":
             print("\nĐang ngắt kết nối MT5...")
             mt5.shutdown()
             print("Đã đóng kết nối. Hẹn gặp lại!")
             break
         else:
-            print("Lựa chọn không hợp lệ, vui lòng chọn từ 0 đến 6.")
+            print("Lựa chọn không hợp lệ, vui lòng chọn từ 0 đến 7.")
 
 
 if __name__ == "__main__":

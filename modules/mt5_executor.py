@@ -1,4 +1,4 @@
-﻿"""
+"""
 modules/mt5_executor.py
 ────────────────────────────────────────────────────────────────
 Cầu nối thực thi lệnh trực tiếp lên MetaTrader 5 (Exness, v.v.)
@@ -42,8 +42,24 @@ class MT5Executor:
             if not self.connect():
                 return False
 
-        # Kiểm tra Symbol có tồn tại trên sàn không (VD: Exness thường là XAUUSDm hoặc XAUUSD)
+        # Kiểm tra Symbol có tồn tại trên sàn không
         symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            # Thử các biến thể hoa/thường hoặc đuôi m/c
+            alt_candidates = [
+                symbol.upper(), symbol.lower(),
+                symbol.rstrip("m").rstrip("M"),
+                f"{symbol.rstrip('m').rstrip('M')}m",
+                f"{symbol.rstrip('m').rstrip('M')}c",
+            ]
+            for alt in alt_candidates:
+                s_info = mt5.symbol_info(alt)
+                if s_info:
+                    print(f"[MT5] ℹ️  Tự động khớp mã: '{symbol}' -> '{alt}'")
+                    symbol = alt
+                    symbol_info = s_info
+                    break
+
         if symbol_info is None:
             print(f"[MT5] ❌ Không tìm thấy mã {symbol} trên sàn.")
             return False
