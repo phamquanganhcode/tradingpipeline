@@ -28,6 +28,11 @@ if errorlevel 1 (
     exit /b 1
 )
 
+set TRADING_SYMBOL=XAUUSDm
+set PIPELINE_RUN_MINUTE=:15
+set PYTHONIOENCODING=utf-8
+set PYTHONUTF8=1
+
 :: Chay Auto Scheduler
 python run_scheduler.py
 
