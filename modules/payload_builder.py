@@ -41,7 +41,9 @@ STRATEGY_SPEC = """
 2. [ENTRY CHỜ] Mua (Buy Stop) khi giá break khỏi Resistance/BB Upper. Bán (Sell Stop) khi giá break khỏi Support/BB Lower.
 3. [SL/TP] SL = 1xATR dưới/trên vùng sideway. TP = Bằng chiều cao hộp sideway.
 
-### NGUYÊN TẮC BẮT BUỘC:
+### NGUYÊN TẮC BẮT BUỘC (SWING TRADING ĐA KHUNG THỜI GIAN):
+- XÁC ĐỊNH XU HƯỚNG CHÍNH: Chỉ dựa trên khung H4 và H1. Xu hướng ở H4 và H1 phải đồng thuận (cùng Uptrend hoặc cùng Downtrend).
+- TÌM ĐIỂM VÀO LỆNH (ENTRY, SL, TP): Bắt buộc sử dụng khung M30 để canh điểm vào lệnh, cắt lỗ và chốt lời.
 - Dù EMA 50 dốc lên nhưng cấu trúc giá gãy (BOS) → TUYỆT ĐỐI không BUY.
 - Luôn ưu tiên cấu trúc giá (Market Structure) hơn chỉ báo (Indicator).
 """
@@ -80,6 +82,16 @@ OUTPUT_SCHEMA = {
                 "price":     {"type": "number"},
             },
         },
+        "alt_entry": {
+            "type": "object",
+            "properties": {
+                "type":      {"type": "string"},
+                "direction": {"type": "string", "enum": ["buy", "sell"]},
+                "zone_low":  {"type": "number"},
+                "zone_high": {"type": "number"},
+                "price":     {"type": "number"},
+            },
+        },
         "stop_loss":   {"type": "number"},
         "take_profit": {"type": "array", "items": {"type": "number"}},
         "risk_reward": {"type": "number"},
@@ -108,10 +120,12 @@ class PayloadBuilder:
         report: TradingAgentReport,
         live_indicators: list[IndicatorSnapshot] | None = None,
         live_price: float | None = None,
+        mt5_status: str | None = None,
     ):
         self.report          = report
         self.live_indicators = live_indicators or []
         self.live_price      = live_price
+        self.mt5_status      = mt5_status
 
     # ── Phần text context ─────────────────────────────────────
 
@@ -226,16 +240,25 @@ class PayloadBuilder:
 Bạn là một Senior Trader chuyên nghiệp. Dựa trên toàn bộ thông tin trên, hãy:
 1. Xác định xem hiện tại có setup vào lệnh ngay (Market Order) không theo checklist.
 2. NẾU KHÔNG CÓ SETUP NGAY (decision = WAIT), bạn VẪN PHẢI đề xuất một lệnh CHỜ (Pending Order) cho kịch bản sắp tới có xác suất cao nhất:
-   - Nếu đang có xu hướng: Đề xuất lệnh Limit tại vùng Pullback (EMA).
-   - Nếu đang sideway: Đề xuất lệnh Stop (Breakout) ngoài biên độ BB/Kháng cự/Hỗ trợ.
-3. BẮT BUỘC cung cấp đầy đủ thông số cho kịch bản giao dịch đó (Dù decision là BUY, SELL hay WAIT):
-   - Entry zone: Vùng giá chờ mua/bán (dùng type="limit" hoặc type="stop" VÀ điền hướng direction="buy" hoặc "sell").
-   - Stop Loss: (dùng ATR={self.report.indicators[0].atr14 if self.report.indicators else 'N/A'} × 1).
+   - CHIẾN THUẬT CHẶN 2 ĐẦU: Nếu có thể, hãy rải cả 2 lệnh chờ cùng lúc. Ví dụ Uptrend: Đặt lệnh Buy Limit ở vùng Pullback (vào trường `entry`), VÀ Đặt thêm lệnh Buy Stop ở kháng cự để đánh Breakout (vào trường `alt_entry`).
+   - Nếu xu hướng giảm (Downtrend): Dùng Sell Limit (vào `entry`) và Sell Stop (vào `alt_entry`).
+3. BẮT BUỘC cung cấp đầy đủ thông số cho kịch bản giao dịch đó:
+   - Entry zone: Vùng giá chờ mua/bán (dùng type="limit" hoặc type="stop" VÀ điền hướng direction="buy" hoặc "sell"). Điền vào `entry` và `alt_entry`.
+   - Stop Loss: (dùng ATR={self.report.indicators[0].atr14 if self.report.indicators else 'N/A'} × 1). Áp dụng chung cho cả 2 lệnh.
    - Take Profit: Bạn PHẢI tự tính toán mức giá TP1 sao cho Tỷ lệ R:R (Khoảng cách từ Entry tới TP1 / Khoảng cách từ Entry tới SL) TỐI THIỂU đạt 1.5x. Tuyệt đối không đặt TP1 quá ngắn chỉ vì cản gần đó! Hãy dời TP1 xa hơn để đảm bảo R:R toán học >= 1.5x. (Lưu ý: Hệ thống validator bằng Python sẽ lấy TP đầu tiên trong mảng để chấm điểm).
 
 **QUAN TRỌNG**: 
 - Hãy phân tích `thought_process` thật chi tiết trước khi đưa ra `decision`.
-- Dù `decision` là "WAIT", các trường `entry`, `stop_loss`, `take_profit` VẪN PHẢI CHỨA SỐ LIỆU của lệnh chờ (Pending order setup).
+- Dù `decision` là "WAIT", các trường `entry`, `alt_entry`, `stop_loss`, `take_profit` VẪN PHẢI CHỨA SỐ LIỆU của lệnh chờ (Pending order setup).
+"""
+
+    def _section_mt5_status(self) -> str:
+        if not self.mt5_status:
+            return ""
+        return f"""
+### 5. TRẠNG THÁI LỆNH HIỆN TẠI TRÊN MT5 (CỦA BOT)
+{self.mt5_status}
+Hãy cân nhắc thông tin này. Nếu bot đang giữ lệnh (POSITION) hoặc lệnh chờ (PENDING) đã hợp lý, bạn có thể quyết định WAIT hoặc dời SL/TP thay vì nhồi thêm lệnh ngược chiều.
 """
 
     # ── Public API ────────────────────────────────────────────
@@ -249,6 +272,7 @@ Bạn là một Senior Trader chuyên nghiệp. Dựa trên toàn bộ thông ti
             self._section_fundamental(),
             self._section_research_summary(),
             self._section_strategy(),
+            self._section_mt5_status(),
             self._section_task(),
         ]
         return "\n".join(s for s in sections if s.strip())

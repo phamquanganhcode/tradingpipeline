@@ -75,6 +75,16 @@ def run_monitor_job():
 
 
 def main():
+    # Khởi tạo logger để lưu log ra file
+    os.makedirs("data", exist_ok=True)
+    log_filename = f"data/scheduler_run_{datetime.now().strftime('%Y%m%d')}.txt"
+    try:
+        from main import DualLogger
+        sys.stdout = DualLogger(log_filename)
+        sys.stderr = sys.stdout
+    except ImportError:
+        pass
+
     print("""
 ╔══════════════════════════════════════════════════════════════╗
 ║          AI TRADING PIPELINE — AUTO SCHEDULER                ║

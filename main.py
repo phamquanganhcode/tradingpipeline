@@ -90,10 +90,23 @@ def run_pipeline(report_path: str, account_balance: float = 10_000.0) -> dict:
 
     # ── STEP 3: Xây dựng payload cho Gemini ──────────────────
     print("\n[STEP 3/5] 🔧 Xây dựng prompt cho Gemini...")
+    
+    # Lấy thông tin MT5 hiện tại
+    mt5_status = None
+    try:
+        from modules.mt5_executor import MT5Executor
+        mt5_bot = MT5Executor()
+        if mt5_bot.connect():
+            mt5_status = mt5_bot.get_current_status(SYMBOL)
+            mt5_bot.shutdown()
+    except Exception as e:
+        print(f"[MT5] ⚠️ Lỗi khi đọc trạng thái MT5: {e}")
+
     builder = PayloadBuilder(
         report          = report,
         live_indicators = live_indicators,
         live_price      = live_price,
+        mt5_status      = mt5_status,
     )
     prompt        = builder.build_prompt()
     output_schema = builder.get_output_schema()
@@ -143,16 +156,35 @@ def run_pipeline(report_path: str, account_balance: float = 10_000.0) -> dict:
                 mt5_decision = proposal.entry.direction.upper()  # "BUY" hoặc "SELL"
                 print(f"[MT5] ℹ️  WAIT→Pending: đặt lệnh {entry_type.upper()} {mt5_decision}")
             
-            # Thực thi
+            # Thực thi Entry chính (có xóa lệnh chờ cũ)
             mt5_bot.execute_trade(
-                symbol=SYMBOL,  # Dùng SYMBOL từ config (ví dụ BTCUSDm) để đúng với mã sàn MT5
+                symbol=SYMBOL,
                 decision=mt5_decision,
                 entry_type=entry_type,
                 entry_price=ep,
                 sl=proposal.stop_loss,
                 tp=tp,
-                lot_size=validation.lot_size
+                lot_size=validation.lot_size,
+                clear_pending=True
             )
+            
+            # Thực thi Entry dự phòng (alt_entry - Đánh OCO chặn 2 đầu)
+            if proposal.alt_entry:
+                alt_ep = proposal.alt_entry.price or proposal.alt_entry.zone_low
+                alt_type = proposal.alt_entry.type
+                alt_decision = proposal.alt_entry.direction.upper()
+                print(f"[MT5] ℹ️  ALT_ENTRY: đặt thêm lệnh chờ OCO {alt_type.upper()} {alt_decision} tại {alt_ep}")
+                mt5_bot.execute_trade(
+                    symbol=SYMBOL,
+                    decision=alt_decision,
+                    entry_type=alt_type,
+                    entry_price=alt_ep,
+                    sl=proposal.stop_loss,
+                    tp=tp,
+                    lot_size=validation.lot_size,
+                    clear_pending=False # Không xóa lệnh chính vừa đặt!
+                )
+            
             mt5_bot.shutdown()
         except Exception as e:
             print(f"[MT5] ⚠️  Lỗi thực thi lệnh: {e}")
@@ -190,6 +222,9 @@ def run_pipeline(report_path: str, account_balance: float = 10_000.0) -> dict:
     
     print(f"  Lot Size  : {validation.lot_size if validation.lot_size else 'Chưa tính (cần duyệt lệnh)'}")
     print(f"  R:R       : {validation.actual_rr if validation.actual_rr else proposal.risk_reward}")
+    if validation.risk_amount_usd and validation.profit_amount_usd:
+        print(f"  Risk (SL) : ~${validation.risk_amount_usd:.2f}")
+        print(f"  Profit(TP): ~${validation.profit_amount_usd:.2f}")
     print(f"  Validation: {validation.status}")
     if validation.reject_reason:
         print(f"  Lý do từ chối: {validation.reject_reason}")

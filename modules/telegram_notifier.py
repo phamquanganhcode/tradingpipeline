@@ -1,4 +1,4 @@
-﻿"""
+"""
 modules/telegram_notifier.py
 ────────────────────────────────────────────────────────────────
 Module gửi thông báo qua Telegram khi có tín hiệu giao dịch 
@@ -47,10 +47,17 @@ class TelegramNotifier:
         if validation.status != "ACCEPT":
             return False
 
-        icon = "🟢" if proposal.decision == "BUY" else "🔴"
+        if proposal.decision == "WAIT":
+            icon = "🟢" if proposal.entry and proposal.entry.direction == "buy" else "🔴"
+            icon += " (PENDING)"
+        else:
+            icon = "🟢" if proposal.decision == "BUY" else "🔴"
         
         entry = proposal.entry.price or proposal.entry.zone_low if proposal.entry else "N/A"
         tp_levels = ", ".join(map(str, proposal.take_profit)) if proposal.take_profit else "N/A"
+        
+        risk_str = f"~${validation.risk_amount_usd:.2f}" if validation.risk_amount_usd else "N/A"
+        profit_str = f"~${validation.profit_amount_usd:.2f}" if validation.profit_amount_usd else "N/A"
         
         msg = (
             f"<b>{icon} TÍN HIỆU GIAO DỊCH MỚI</b>\n"
@@ -62,7 +69,9 @@ class TelegramNotifier:
             f"<b>Phân tích AI:</b>\n"
             f"<i>{proposal.setup}</i>\n"
             f"<b>R:R:</b> {validation.actual_rr}\n"
-            f"<b>Đề xuất Lot (Risk 2%):</b> {validation.lot_size}"
+            f"<b>Đề xuất Lot:</b> {validation.lot_size}\n"
+            f"<b>Risk (Chạm SL mất):</b> {risk_str}\n"
+            f"<b>Profit (Chạm TP được):</b> {profit_str}"
         )
         return self.send_message(msg)
 

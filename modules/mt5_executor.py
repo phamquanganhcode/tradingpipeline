@@ -4,6 +4,7 @@ modules/mt5_executor.py
 Cầu nối thực thi lệnh trực tiếp lên MetaTrader 5 (Exness, v.v.)
 """
 import os
+import datetime
 import MetaTrader5 as mt5
 from dotenv import load_dotenv
 
@@ -36,7 +37,7 @@ class MT5Executor:
             print(f"[MT5] ❌ Đăng nhập thất bại. Lỗi: {mt5.last_error()}")
             return False
 
-    def execute_trade(self, symbol: str, decision: str, entry_type: str, entry_price: float, sl: float, tp: float, lot_size: float) -> bool:
+    def execute_trade(self, symbol: str, decision: str, entry_type: str, entry_price: float, sl: float, tp: float, lot_size: float, clear_pending: bool = True) -> bool:
         """Gửi lệnh giao dịch lên sàn."""
         if not self.is_connected:
             if not self.connect():
@@ -99,6 +100,19 @@ class MT5Executor:
             print(f"[MT5] ⚠️ Không hỗ trợ loại lệnh: {decision} {entry_type}")
             return False
 
+        # XÓA LỆNH CHỜ CŨ CỦA BOT (tránh nhồi lệnh)
+        if clear_pending:
+            existing_orders = mt5.orders_get(symbol=symbol)
+            if existing_orders:
+                for order in existing_orders:
+                    if order.magic == 999999:  # Chỉ can thiệp lệnh do bot đặt
+                        cancel_request = {
+                            "action": mt5.TRADE_ACTION_REMOVE,
+                            "order": order.ticket,
+                        }
+                        mt5.order_send(cancel_request)
+                        print(f"[MT5] 🗑️ Đã xóa lệnh chờ cũ (Ticket: {order.ticket}) để cập nhật lệnh mới.")
+
         # Cấu trúc Request gửi lên MT5
         request = {
             "action": action,
@@ -111,9 +125,16 @@ class MT5Executor:
             "deviation": 20,
             "magic": 999999,      # Magic number để nhận diện lệnh do Bot đánh
             "comment": "AI Bot",
-            "type_time": mt5.ORDER_TIME_GTC, # Good till cancelled
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
+
+        # Nếu là lệnh Pending (Chờ), cài đặt tự động hủy sau 4 giờ
+        if action == mt5.TRADE_ACTION_PENDING:
+            expiration_time = int((datetime.datetime.now() + datetime.timedelta(hours=4)).timestamp())
+            request["type_time"] = mt5.ORDER_TIME_SPECIFIED
+            request["expiration"] = expiration_time
+        else:
+            request["type_time"] = mt5.ORDER_TIME_GTC
 
         # Gửi lệnh
         print(f"[MT5] ⏳ Đang gửi lệnh {decision} {lot_size} lot {symbol}...")
@@ -126,5 +147,38 @@ class MT5Executor:
         print(f"[MT5] ✅ Đặt lệnh THÀNH CÔNG! Ticket: {result.order}")
         return True
         
+    def get_current_status(self, symbol: str) -> str:
+        """Lấy thông tin lệnh đang mở (position) hoặc lệnh chờ (pending) của symbol này (chỉ lấy lệnh của bot)."""
+        if not self.is_connected:
+            if not self.connect():
+                return "Không thể kết nối MT5 để đọc lệnh."
+
+        status_text = []
+
+        # Kiểm tra Positions (lệnh đang chạy)
+        positions = mt5.positions_get(symbol=symbol)
+        if positions:
+            for pos in positions:
+                if pos.magic == 999999:
+                    pos_type = "BUY" if pos.type == mt5.POSITION_TYPE_BUY else "SELL"
+                    status_text.append(f"- [POSITION ĐANG CHẠY] {pos_type} {pos.volume} lot | Entry: {pos.price_open} | SL: {pos.sl} | TP: {pos.tp} | Lợi nhuận hiện tại: ${pos.profit:.2f}")
+
+        # Kiểm tra Orders (lệnh chờ)
+        orders = mt5.orders_get(symbol=symbol)
+        if orders:
+            for order in orders:
+                if order.magic == 999999:
+                    o_type = "PENDING"
+                    if order.type == mt5.ORDER_TYPE_BUY_LIMIT: o_type = "BUY LIMIT"
+                    elif order.type == mt5.ORDER_TYPE_SELL_LIMIT: o_type = "SELL LIMIT"
+                    elif order.type == mt5.ORDER_TYPE_BUY_STOP: o_type = "BUY STOP"
+                    elif order.type == mt5.ORDER_TYPE_SELL_STOP: o_type = "SELL STOP"
+                    status_text.append(f"- [{o_type} ĐANG CHỜ] {order.volume} lot | Chờ khớp tại: {order.price_open} | SL: {order.sl} | TP: {order.tp}")
+
+        if not status_text:
+            return "Hiện tại KHÔNG CÓ lệnh nào (do bot đánh) đang chạy hoặc đang chờ."
+
+        return "\n".join(status_text)
+
     def shutdown(self):
         mt5.shutdown()

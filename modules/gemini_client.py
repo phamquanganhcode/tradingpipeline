@@ -47,7 +47,8 @@ Nguyên tắc tuyệt đối:
 3. Nếu thị trường hiện tại chưa có nến tín hiệu (trigger) hoặc đang sideway, decision có thể là "WAIT".
 4. QUAN TRỌNG: Ngay cả khi decision là "WAIT", bạn VẪN BẮT BUỘC phải cung cấp kế hoạch giao dịch CHỜ (Pending Setup) tốt nhất. Hãy phân tích xem nên chờ mua/bán Pullback (Limit) hay Breakout (Stop), và ĐIỀN ĐẦY ĐỦ các trường `entry`, `stop_loss`, `take_profit` cho kịch bản đó.
 5. SL và TP phải được tính toán dựa trên cấu trúc, ATR và Bollinger Bands.
-6. Trả về JSON hợp lệ, không thêm text thừa ngoài JSON."""
+6. PHƯƠNG PHÁP SWING TRADING: Chỉ xác định xu hướng chính dựa trên H4 và H1. Phải sử dụng khung M30 để tìm điểm vào lệnh (Entry), Stop Loss (SL) và Take Profit (TP).
+7. Trả về JSON hợp lệ, không thêm text thừa ngoài JSON."""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -204,6 +205,20 @@ class GeminiClient:
         if isinstance(raw_conf, (int, float)) and raw_conf > 1.0:
             raw_conf = raw_conf / 100.0
 
+        alt_entry_d = data.get("alt_entry")
+        alt_entry_zone = None
+        if alt_entry_d:
+            raw_alt_type = alt_entry_d.get("type", "limit").lower()
+            if "stop" in raw_alt_type: raw_alt_type = "stop"
+            elif "limit" in raw_alt_type: raw_alt_type = "limit"
+            alt_entry_zone = EntryZone(
+                type      = raw_alt_type,
+                direction = alt_entry_d.get("direction", "buy").lower(),
+                zone_low  = alt_entry_d.get("zone_low"),
+                zone_high = alt_entry_d.get("zone_high"),
+                price     = alt_entry_d.get("price"),
+            )
+
         proposal = TradeProposal(
             thought_process=ThoughtProcess(
                 market_context   = tp_data.get("market_context", ""),
@@ -220,6 +235,7 @@ class GeminiClient:
             checklist_failed = data.get("checklist_failed", []),
 
             entry = entry_zone,
+            alt_entry = alt_entry_zone,
 
             stop_loss    = data.get("stop_loss"),
             take_profit  = tps,

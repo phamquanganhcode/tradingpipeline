@@ -125,6 +125,7 @@ class TradeProposal(BaseModel):
     checklist_failed: list[str] = []   # các bước chưa đủ điều kiện
 
     entry:       Optional[EntryZone] = None
+    alt_entry:   Optional[EntryZone] = None
     stop_loss:   Optional[float] = None
     take_profit: list[float] = []
 
@@ -149,6 +150,7 @@ class ValidationResult(BaseModel):
     lot_size:         Optional[float] = None
     actual_rr:        Optional[float] = None
     risk_amount_usd:  Optional[float] = None
+    profit_amount_usd: Optional[float] = None
 
 
 class TradeRecord(BaseModel):

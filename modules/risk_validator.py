@@ -251,7 +251,7 @@ class RiskValidator:
         checks = [
             ("AI Decision",    self._check_decision),
             # ("Daily limit",    self._check_daily_limit), # Bỏ giới hạn theo yêu cầu của User
-            ("News filter",    self._check_news),
+            # ("News filter",    self._check_news),  # Tạm tắt do lỗi quét từ khóa
             ("No-Trade Zone",  self._check_no_trade_zone),
             ("BOS rule",       self._check_bos),
             ("Entry/SL valid", self._check_entry_sl),
@@ -271,6 +271,7 @@ class RiskValidator:
         sl_pips   = self._calculate_sl_pips()
         lot_size  = self._calculate_lot_size(sl_pips) if sl_pips else None
         risk_usd  = (lot_size or 0) * (sl_pips or 0) * _pip_value(self.proposal.symbol)
+        profit_usd = risk_usd * actual_rr if (risk_usd and actual_rr) else 0.0
 
         rr_reason = self._check_rr(actual_rr)
         if rr_reason and not reject_reason:
@@ -285,13 +286,14 @@ class RiskValidator:
                 actual_rr=actual_rr,
                 lot_size=lot_size,
                 risk_amount_usd=round(risk_usd, 2) if risk_usd else None,
+                profit_amount_usd=round(profit_usd, 2) if profit_usd else None,
             )
 
         # --- ACCEPT ---
         label = "PENDING ORDER" if is_pending else "DIRECT ORDER"
         print(
             f"[RiskValidator] ✅ ACCEPT ({label}) — "
-            f"SL={sl_pips} pips | Lot={lot_size} | R:R={actual_rr} | Risk=~${risk_usd:.2f}"
+            f"SL={sl_pips} pips | Lot={lot_size} | R:R={actual_rr} | Risk=~${risk_usd:.2f} | Profit=~${profit_usd:.2f}"
         )
         return ValidationResult(
             status            = "ACCEPT",
@@ -299,5 +301,6 @@ class RiskValidator:
             lot_size          = lot_size,
             actual_rr         = actual_rr,
             risk_amount_usd   = round(risk_usd, 2),
+            profit_amount_usd = round(profit_usd, 2),
         )
 

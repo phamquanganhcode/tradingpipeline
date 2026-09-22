@@ -199,13 +199,39 @@ class TradeMonitor:
 
     def run_check(self, price_fetcher=None) -> list[dict]:
         """
-        Chạy kiểm tra tất cả lệnh đang mở.
+        Chạy kiểm tra tất cả lệnh đang mở và Dọn dẹp OCO (One Cancels the Other).
         price_fetcher: callable(symbol) -> float | None
-        Nếu không có price_fetcher, yêu cầu nhập giá thủ công.
         """
+        # 1. Cơ chế OCO Cleanup: Xóa lệnh chờ nếu đã có lệnh khớp (Position)
+        print("[TradeMonitor] 🧹 Đang chạy cơ chế OCO Cleanup (Dọn dẹp lệnh chờ thừa)...")
+        try:
+            from modules.mt5_executor import MT5Executor
+            import MetaTrader5 as mt5
+            
+            mt5_bot = MT5Executor()
+            if mt5_bot.connect():
+                positions = mt5.positions_get()
+                if positions:
+                    active_symbols = set(p.symbol for p in positions if p.magic == 999999)
+                    for sym in active_symbols:
+                        orders = mt5.orders_get(symbol=sym)
+                        if orders:
+                            for order in orders:
+                                if order.magic == 999999:
+                                    cancel_request = {
+                                        "action": mt5.TRADE_ACTION_REMOVE,
+                                        "order": order.ticket,
+                                    }
+                                    mt5.order_send(cancel_request)
+                                    print(f"[MT5] 🗑️ OCO Cleanup: Đã tự động XÓA lệnh chờ (Ticket: {order.ticket}) cho mã {sym} vì đã có vị thế mở!")
+                mt5_bot.shutdown()
+        except Exception as e:
+            print(f"[MT5] ⚠️ Lỗi khi chạy OCO Cleanup: {e}")
+
+        # 2. Kiểm tra SL/TP cho các lệnh trong DB
         open_trades = self.get_open_trades()
         if not open_trades:
-            print("[TradeMonitor] ℹ️  Không có lệnh nào đang mở.")
+            print("[TradeMonitor] ℹ️  Không có lệnh nào đang mở (DB).")
             return []
 
         print(f"\n[TradeMonitor] 🔍 Đang kiểm tra {len(open_trades)} lệnh đang mở...")
