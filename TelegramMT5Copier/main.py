@@ -17,6 +17,8 @@ API_ID = int(os.getenv("TELEGRAM_API_ID", 0))
 API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 PHONE_NUMBER = os.getenv("TELEGRAM_PHONE_NUMBER", "")
 CHANNEL_NAME = os.getenv("TELEGRAM_CHANNEL_NAME", "")
+if CHANNEL_NAME.lstrip('-').isdigit():
+    CHANNEL_NAME = int(CHANNEL_NAME)
 
 # Cấu hình Lot chia đôi
 LOT_SIZE_TP1 = float(os.getenv("MT5_LOT_SIZE_TP1", 0.02))
