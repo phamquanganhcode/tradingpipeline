@@ -41,9 +41,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-PENDING_EXPIRATION_MINUTES = int(os.getenv("PENDING_EXPIRATION_MINUTES", 10))
-MAX_TRADE_DURATION_MINUTES = int(os.getenv("MAX_TRADE_DURATION_MINUTES", 60))
-
 # ==========================================
 # HÀM KẾT NỐI MT5
 # ==========================================
@@ -233,8 +230,8 @@ def update_pending_orders(signal_data):
             "price": float(new_price),
             "sl": float(new_sl),
             "tp": float(new_tp),
-            "type_time": order.type_time,
-            "expiration": order.time_expiration,
+            "type_time": mt5.ORDER_TIME_GTC,
+            "expiration": 0,
         }
         
         result = mt5.order_send(request)
@@ -263,7 +260,6 @@ def execute_trade(signal_data):
 
     current_ask = tick.ask
     current_bid = tick.bid
-    expiration = int(time.time()) + (PENDING_EXPIRATION_MINUTES * 60)
     logs = []
 
     # HÀM PHỤ ĐỂ GỬI TỪNG LỆNH (CHIA LỆNH)
@@ -303,14 +299,11 @@ def execute_trade(signal_data):
             "deviation": 20,
             "magic": MAGIC_NUMBER,
             "comment": f"Bot AI - {label}",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC if not is_pending else 0,
         }
-        
-        if is_pending:
-            request["type_time"] = mt5.ORDER_TIME_SPECIFIED
-            request["expiration"] = expiration
-        else:
-            request["type_time"] = mt5.ORDER_TIME_GTC
-            request["type_filling"] = mt5.ORDER_FILLING_IOC
+
+        if not is_pending:
             request["price"] = current_ask if signal_data['type'] == 'BUY' else current_bid
 
         result = mt5.order_send(request)
@@ -355,31 +348,6 @@ def close_position(position, comment="Auto Close"):
         "type_filling": mt5.ORDER_FILLING_IOC,
     }
     return mt5.order_send(request)
-
-async def trade_manager_loop(client):
-    print(f"Đã kích hoạt hệ thống Quản Lý Lệnh (Tuần tra tự đóng lệnh sau {MAX_TRADE_DURATION_MINUTES} phút).")
-    while True:
-        try:
-            if mt5.terminal_info() is not None:
-                positions = mt5.positions_get(magic=MAGIC_NUMBER)
-                if positions:
-                    current_time = time.time()
-                    for pos in positions:
-                        duration = current_time - pos.time
-                        if duration >= (MAX_TRADE_DURATION_MINUTES * 60):
-                            print(f"\nPhát hiện lệnh {pos.ticket} đã mở quá {MAX_TRADE_DURATION_MINUTES} phút. Đang xử lý đóng lệnh...")
-                            result = close_position(pos, comment=f"Close > {MAX_TRADE_DURATION_MINUTES}m")
-                            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-                                msg = f"⏳ TỰ ĐỘNG ĐÓNG lệnh {pos.ticket} (lãi/lỗ: {pos.profit}$) do quá thời gian."
-                                print(msg)
-                                if NOTIFICATION_CHANNEL:
-                                    await client.send_message(NOTIFICATION_CHANNEL, f"🤖 **BOT REPORT:**\n{msg}")
-                            else:
-                                print(f"Lỗi đóng lệnh tự động: {result.comment}")
-        except Exception as e:
-            print(f"Lỗi hệ thống quản lý lệnh: {e}")
-            
-        await asyncio.sleep(10)
 
 client = TelegramClient('session_name', API_ID, API_HASH)
 
@@ -434,8 +402,6 @@ async def main():
     if not API_ID or not API_HASH:
         print("Lỗi: Vui lòng cấu hình TELEGRAM_API_ID và TELEGRAM_API_HASH trong file .env")
         return
-
-    asyncio.create_task(trade_manager_loop(client))
 
     await client.start(phone=PHONE_NUMBER)
     print(f"Đang lắng nghe tín hiệu từ kênh: {CHANNEL_NAME}")
