@@ -66,7 +66,7 @@ def parse_signal(message_text):
     Nếu tin nhắn không phải là tín hiệu hoặc lệnh điều khiển, trả về JSON rỗng {{}}.
     
     Các trường cần có:
-    "action": "NEW" (kèo mới), "UPDATE" (dời Entry/SL), "CANCEL" (tin nhắn yêu cầu hủy bỏ lệnh chờ chưa cắn), hoặc "CLOSE" (tin nhắn yêu cầu đóng, cắt, chốt lệnh đang chạy).
+    "action": "NEW" (kèo mới), "UPDATE" (dời Entry/SL), "CANCEL" (nếu có chữ "hủy", "xóa" -> luôn là CANCEL để xóa lệnh chờ), hoặc "CLOSE" (nếu có chữ "đóng", "cắt", "chốt" -> luôn là CLOSE để đóng lệnh đang chạy).
     "symbol": "Tên cặp tiền (ví dụ XAUUSD). Nếu là UPDATE/CANCEL/CLOSE không nhắc tên, hãy ngầm hiểu là XAUUSD. Nếu hủy toàn bộ mọi cặp thì để null".
     "type": "BUY hoặc SELL. (Ví dụ 'hủy lệnh buy' -> action: CANCEL, type: BUY). Có thể null nếu áp dụng cho cả hai chiều".
     "entry": Số thập phân cho giá vào lệnh (Nếu có nhiều giá, lấy giá đầu tiên. Nếu là tin UPDATE báo dời giá, ghi mức giá mới vào đây).
