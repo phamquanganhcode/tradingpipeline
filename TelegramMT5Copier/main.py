@@ -87,8 +87,18 @@ def parse_signal(message_text, current_price_info=""):
     {message_text}
     """
     try:
-        model = genai.GenerativeModel('gemini-3.1-flash-lite')
-        response = model.generate_content(prompt)
+        try:
+            model = genai.GenerativeModel('gemini-3.1-flash-lite')
+            response = model.generate_content(prompt)
+        except Exception as api_e:
+            error_msg = str(api_e).lower()
+            if '429' in error_msg or 'quota' in error_msg:
+                print("-> Hết hạn ngạch (Rate Limit) của model 3.1! Tự động chuyển sang model dự phòng: gemini-3.5-flash-lite...")
+                model_fallback = genai.GenerativeModel('gemini-3.5-flash-lite')
+                response = model_fallback.generate_content(prompt)
+            else:
+                raise api_e
+                
         text = response.text.strip()
         
         if text.startswith('```'):
