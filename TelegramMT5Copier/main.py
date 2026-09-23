@@ -50,8 +50,9 @@ def connect_mt5():
 # ==========================================
 def parse_signal(message_text):
     ignore_keywords = ['hit', 'pips', 'profit', 'running', 'closed', 'win', 'loss']
-    # Chỉ chặn nếu là báo cáo kết quả thuần túy (không phải lệnh cập nhật entry)
-    if any(keyword in message_text.lower() for keyword in ignore_keywords) and "hạ" not in message_text.lower() and "dời" not in message_text.lower():
+    # Chỉ chặn nếu là báo cáo kết quả thuần túy (không chứa từ khóa ra lệnh như hạ, dời, hủy, đóng, cắt, chốt)
+    action_keywords = ['hạ', 'dời', 'hủy', 'đóng', 'cắt', 'chốt']
+    if any(keyword in message_text.lower() for keyword in ignore_keywords) and not any(kw in message_text.lower() for kw in action_keywords):
         print("-> Đã chặn một tin nhắn báo cáo kết quả.")
         return None
         
@@ -62,13 +63,13 @@ def parse_signal(message_text):
     prompt = f"""
     Bạn là một hệ thống phân tích tín hiệu Forex. Hãy đọc tin nhắn dưới đây và trích xuất thông tin.
     LƯU Ý: Trả về CHỈ một đoạn JSON chuẩn (không markdown).
-    Nếu tin nhắn không phải là tín hiệu (không có điểm vào lệnh hoặc cập nhật lệnh), trả về JSON rỗng {{}}.
+    Nếu tin nhắn không phải là tín hiệu hoặc lệnh điều khiển, trả về JSON rỗng {{}}.
     
     Các trường cần có:
-    "action": "NEW" (nếu là kèo mới) hoặc "UPDATE" (nếu là tin nhắn cập nhật/dời Entry, dời SL của kèo cũ).
-    "symbol": "Tên cặp tiền (ví dụ XAUUSD). Nếu là UPDATE không nhắc tên, hãy ngầm hiểu là XAUUSD".
-    "type": "BUY hoặc SELL. (Nếu text ghi WAIT nhưng có chữ Sell Limit thì là SELL. Cập nhật thì để null cũng được)".
-    "entry": Số thập phân cho giá vào lệnh (Nếu có nhiều giá, lấy giá đầu tiên. Nếu là tin UPDATE báo dời giá/hạ giá, hãy ghi mức giá mới vào đây).
+    "action": "NEW" (kèo mới), "UPDATE" (dời Entry/SL), "CANCEL" (tin nhắn yêu cầu hủy bỏ lệnh chờ chưa cắn), hoặc "CLOSE" (tin nhắn yêu cầu đóng, cắt, chốt lệnh đang chạy).
+    "symbol": "Tên cặp tiền (ví dụ XAUUSD). Nếu là UPDATE/CANCEL/CLOSE không nhắc tên, hãy ngầm hiểu là XAUUSD. Nếu hủy toàn bộ mọi cặp thì để null".
+    "type": "BUY hoặc SELL. (Ví dụ 'hủy lệnh buy' -> action: CANCEL, type: BUY). Có thể null nếu áp dụng cho cả hai chiều".
+    "entry": Số thập phân cho giá vào lệnh (Nếu có nhiều giá, lấy giá đầu tiên. Nếu là tin UPDATE báo dời giá, ghi mức giá mới vào đây).
     "sl": Số thập phân cho Stop Loss (Nếu có cập nhật SL thì ghi, không thì null).
     "tp1": Số thập phân cho Take Profit 1.
     "tp2": Số thập phân cho Take Profit 2.
@@ -88,12 +89,12 @@ def parse_signal(message_text):
                 
         data = json.loads(text)
         
-        if not data.get('action') or not data.get('symbol'):
+        if not data.get('action'):
             return None
             
         return {
             'action': data.get('action', 'NEW').upper().strip(),
-            'symbol': data['symbol'].replace('#', '').strip(),
+            'symbol': data.get('symbol').replace('#', '').strip() if data.get('symbol') else None,
             'type': str(data.get('type', '')).upper().strip() if data.get('type') else None,
             'entry': float(data['entry']) if data.get('entry') else None,
             'sl': float(data['sl']) if data.get('sl') else None,
@@ -107,7 +108,75 @@ def parse_signal(message_text):
 # ==========================================
 # CÁC HÀM XỬ LÝ LỆNH TRÊN MT5
 # ==========================================
+def cancel_pending_orders(signal_data):
+    if not connect_mt5():
+        return
+        
+    symbol = signal_data.get('symbol')
+    if symbol:
+        symbol += SYMBOL_SUFFIX
+        orders = mt5.orders_get(symbol=symbol)
+    else:
+        orders = mt5.orders_get()
+        
+    if not orders:
+        print("Không có lệnh CHỜ nào để hủy.")
+        return
+        
+    target_type = signal_data.get('type')
+    
+    for order in orders:
+        if order.magic != MAGIC_NUMBER:
+            continue
+            
+        if target_type == 'BUY' and order.type not in (mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP):
+            continue
+        if target_type == 'SELL' and order.type not in (mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP):
+            continue
+            
+        request = {
+            "action": mt5.TRADE_ACTION_REMOVE,
+            "order": order.ticket,
+        }
+        
+        result = mt5.order_send(request)
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            print(f"Lỗi hủy lệnh {order.ticket}: {result.retcode}")
+        else:
+            print(f"Đã HỦY lệnh chờ {order.ticket} thành công theo yêu cầu từ Telegram.")
+
+def close_open_positions_by_signal(signal_data):
+    if not connect_mt5():
+        return
+        
+    symbol = signal_data.get('symbol')
+    if symbol:
+        symbol += SYMBOL_SUFFIX
+        positions = mt5.positions_get(symbol=symbol)
+    else:
+        positions = mt5.positions_get()
+        
+    if not positions:
+        print("Không có lệnh ĐANG MỞ nào để đóng.")
+        return
+        
+    target_type = signal_data.get('type')
+    
+    for pos in positions:
+        if pos.magic != MAGIC_NUMBER:
+            continue
+            
+        if target_type == 'BUY' and pos.type != mt5.ORDER_TYPE_BUY:
+            continue
+        if target_type == 'SELL' and pos.type != mt5.ORDER_TYPE_SELL:
+            continue
+            
+        close_position(pos)
+        print(f"Đã ĐÓNG TAY lệnh {pos.ticket} theo yêu cầu từ Telegram.")
+
 def update_pending_orders(signal_data):
+    if not signal_data.get('symbol'):
+        return
     symbol = signal_data['symbol'] + SYMBOL_SUFFIX
     
     if not connect_mt5():
@@ -145,6 +214,8 @@ def update_pending_orders(signal_data):
 
 
 def execute_trade(signal_data):
+    if not signal_data.get('symbol'):
+        return
     symbol = signal_data['symbol'] + SYMBOL_SUFFIX
     
     if not connect_mt5():
@@ -248,7 +319,7 @@ def close_position(position):
         "price": price,
         "deviation": 20,
         "magic": MAGIC_NUMBER,
-        "comment": "Auto Close > 60m",
+        "comment": "Auto Close",
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_IOC,
     }
@@ -256,7 +327,7 @@ def close_position(position):
     if result.retcode != mt5.TRADE_RETCODE_DONE:
         print(f"Lỗi tự động đóng lệnh {position.ticket}: {result.retcode} - {result.comment}")
     else:
-        print(f"Đã TỰ ĐỘNG ĐÓNG lệnh {position.ticket} (lãi/lỗ: {position.profit}$) do quá thời gian {MAX_TRADE_DURATION_MINUTES} phút.")
+        pass # In log ở chỗ gọi hàm
 
 async def trade_manager_loop():
     print(f"Đã kích hoạt hệ thống Quản Lý Lệnh (Tuần tra tự đóng lệnh sau {MAX_TRADE_DURATION_MINUTES} phút).")
@@ -271,6 +342,7 @@ async def trade_manager_loop():
                         if duration >= (MAX_TRADE_DURATION_MINUTES * 60):
                             print(f"\nPhát hiện lệnh {pos.ticket} đã mở quá {MAX_TRADE_DURATION_MINUTES} phút. Đang xử lý đóng lệnh...")
                             close_position(pos)
+                            print(f"Đã TỰ ĐỘNG ĐÓNG lệnh {pos.ticket} (lãi/lỗ: {pos.profit}$) do quá thời gian.")
         except Exception as e:
             print(f"Lỗi hệ thống quản lý lệnh: {e}")
             
@@ -288,8 +360,14 @@ async def handler(event):
     
     if signal_data:
         print(f"Đã phân tích tín hiệu AI: {signal_data}")
-        if signal_data.get('action') == 'UPDATE':
+        action = signal_data.get('action')
+        
+        if action == 'UPDATE':
             update_pending_orders(signal_data)
+        elif action == 'CANCEL':
+            cancel_pending_orders(signal_data)
+        elif action == 'CLOSE':
+            close_open_positions_by_signal(signal_data)
         else:
             execute_trade(signal_data)
 
