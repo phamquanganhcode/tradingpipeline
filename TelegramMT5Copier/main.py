@@ -48,7 +48,7 @@ def connect_mt5():
 # ==========================================
 # HÀM PHÂN TÍCH TIN NHẮN (BẰNG GEMINI AI)
 # ==========================================
-def parse_signal(message_text):
+def parse_signal(message_text, current_price_info=""):
     ignore_keywords = ['hit', 'pips', 'profit', 'running', 'closed', 'win', 'loss']
     # Chỉ chặn nếu là báo cáo kết quả thuần túy (không chứa từ khóa ra lệnh như hạ, dời, hủy, đóng, cắt, chốt)
     action_keywords = ['hạ', 'dời', 'hủy', 'đóng', 'cắt', 'chốt']
@@ -62,6 +62,9 @@ def parse_signal(message_text):
 
     prompt = f"""
     Bạn là một hệ thống phân tích tín hiệu Forex. Hãy đọc tin nhắn dưới đây và trích xuất thông tin.
+    {current_price_info}
+    LƯU Ý QUAN TRỌNG: Nếu tin nhắn báo dời giá, hạ giá mà chỉ nói 2 chữ số cuối (ví dụ "hạ xuống 35", "dời về 38"), bạn BẮT BUỘC phải ghép nó với đầu số của giá hiện tại để ra giá thực tế (ví dụ giá hiện tại là 4339, báo về 38 thì kết quả phải là 4338.0). Tuyệt đối không trả về số 38.0.
+    
     LƯU Ý: Trả về CHỈ một đoạn JSON chuẩn (không markdown).
     Nếu tin nhắn không phải là tín hiệu hoặc lệnh điều khiển, trả về JSON rỗng {{}}.
     
@@ -363,7 +366,13 @@ async def handler(event):
     print("\n--- NHẬN ĐƯỢC TIN NHẮN MỚI ---")
     print(message_text)
     
-    signal_data = parse_signal(message_text)
+    current_price_info = ""
+    if connect_mt5():
+        tick = mt5.symbol_info_tick("XAUUSD" + SYMBOL_SUFFIX)
+        if tick:
+            current_price_info = f"GỢI Ý: Giá XAUUSD hiện tại trên thị trường đang là {tick.ask}."
+            
+    signal_data = parse_signal(message_text, current_price_info)
     
     if signal_data:
         print(f"Đã phân tích tín hiệu AI: {signal_data}")
@@ -384,7 +393,13 @@ async def edit_handler(event):
     print("\n--- PHÁT HIỆN TIN NHẮN BỊ CHỈNH SỬA ---")
     print(message_text)
     
-    signal_data = parse_signal(message_text)
+    current_price_info = ""
+    if connect_mt5():
+        tick = mt5.symbol_info_tick("XAUUSD" + SYMBOL_SUFFIX)
+        if tick:
+            current_price_info = f"GỢI Ý: Giá XAUUSD hiện tại trên thị trường đang là {tick.ask}."
+            
+    signal_data = parse_signal(message_text, current_price_info)
     
     if signal_data:
         print(f"Đã phân tích tín hiệu AI (từ Edit): {signal_data}")
