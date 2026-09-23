@@ -54,6 +54,10 @@ def connect_mt5():
 # HÀM PHÂN TÍCH TIN NHẮN (BẰNG GEMINI AI)
 # ==========================================
 def parse_signal(message_text, current_price_info=""):
+    if "tổng hợp" in message_text.lower():
+        print("-> Đã chặn một tin nhắn báo cáo tổng hợp.")
+        return None
+
     ignore_keywords = ['hit', 'pips', 'profit', 'running', 'closed', 'win', 'loss']
     # Chỉ chặn nếu là báo cáo kết quả thuần túy (không chứa từ khóa ra lệnh như hạ, dời, hủy, đóng, cắt, chốt)
     action_keywords = ['hạ', 'dời', 'hủy', 'đóng', 'cắt', 'chốt']
@@ -74,7 +78,7 @@ def parse_signal(message_text, current_price_info=""):
     Nếu tin nhắn không phải là tín hiệu hoặc lệnh điều khiển, trả về JSON rỗng {{}}.
     
     Các trường cần có:
-    "action": "NEW" (kèo mới), "UPDATE" (dời Entry/SL), "CANCEL" (nếu có chữ "hủy", "xóa" -> luôn là CANCEL để xóa lệnh chờ), hoặc "CLOSE" (nếu có chữ "đóng", "cắt", "chốt" -> luôn là CLOSE để đóng lệnh đang chạy).
+    "action": "NEW" (kèo mới), "UPDATE" (dời Entry/SL), "CANCEL" (chỉ trả về CANCEL khi tin nhắn là LỆNH YÊU CẦU hủy/xóa. KHÔNG trả về CANCEL nếu chữ "hủy", "xóa" chỉ là trạng thái của một kèo cũ như "Đã hủy"), hoặc "CLOSE" (nếu có chữ "đóng", "cắt", "chốt" -> luôn là CLOSE để đóng lệnh đang chạy).
     "symbol": "Tên cặp tiền (ví dụ XAUUSD). Nếu là UPDATE/CANCEL/CLOSE không nhắc tên, hãy ngầm hiểu là XAUUSD. Nếu hủy toàn bộ mọi cặp thì để null".
     "type": "BUY hoặc SELL. (Ví dụ 'hủy lệnh buy' -> action: CANCEL, type: BUY). Có thể null nếu áp dụng cho cả hai chiều".
     "entry1": Số thập phân cho giá vào lệnh 1 (Ví dụ Entry: 4292 4291 thì entry1 = 4292. Nếu chỉ có 1 giá thì lấy giá đó).
