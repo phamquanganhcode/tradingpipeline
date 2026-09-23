@@ -194,6 +194,13 @@ def update_pending_orders(signal_data):
             
         new_price = signal_data.get('entry') or order.price_open
         new_sl = signal_data.get('sl') or order.sl
+        new_tp = order.tp
+        
+        # Cập nhật TP đúng theo từng lệnh chia đôi
+        if "TP1" in order.comment and signal_data.get('tp1'):
+            new_tp = signal_data['tp1']
+        elif "TP2" in order.comment and signal_data.get('tp2'):
+            new_tp = signal_data['tp2']
         
         request = {
             "action": mt5.TRADE_ACTION_MODIFY,
@@ -201,7 +208,7 @@ def update_pending_orders(signal_data):
             "symbol": symbol,
             "price": float(new_price),
             "sl": float(new_sl),
-            "tp": float(order.tp),
+            "tp": float(new_tp),
             "type_time": order.type_time,
             "expiration": order.time_expiration,
         }
@@ -210,7 +217,7 @@ def update_pending_orders(signal_data):
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             print(f"Lỗi cập nhật lệnh {order.ticket}: {result.retcode} - {result.comment}")
         else:
-            print(f"Đã cập nhật lệnh chờ {order.ticket} thành công! Entry mới: {new_price} | SL mới: {new_sl}")
+            print(f"Đã cập nhật lệnh chờ {order.ticket} thành công! Entry: {new_price} | SL: {new_sl} | TP: {new_tp}")
 
 
 def execute_trade(signal_data):
@@ -370,6 +377,19 @@ async def handler(event):
             close_open_positions_by_signal(signal_data)
         else:
             execute_trade(signal_data)
+
+@client.on(events.MessageEdited(chats=CHANNEL_NAME))
+async def edit_handler(event):
+    message_text = event.message.text
+    print("\n--- PHÁT HIỆN TIN NHẮN BỊ CHỈNH SỬA ---")
+    print(message_text)
+    
+    signal_data = parse_signal(message_text)
+    
+    if signal_data:
+        print(f"Đã phân tích tín hiệu AI (từ Edit): {signal_data}")
+        # Bất kể là NEW hay gì, hễ tin nhắn bị edit thì ta mang đi cập nhật lệnh chờ
+        update_pending_orders(signal_data)
 
 async def main():
     print("Đang khởi động Bot...")
