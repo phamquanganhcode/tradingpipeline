@@ -79,7 +79,8 @@ def parse_signal(message_text, current_price_info=""):
     "action": "NEW" (kèo mới), "UPDATE" (dời Entry/SL), "CANCEL" (nếu có chữ "hủy", "xóa" -> luôn là CANCEL để xóa lệnh chờ), hoặc "CLOSE" (nếu có chữ "đóng", "cắt", "chốt" -> luôn là CLOSE để đóng lệnh đang chạy).
     "symbol": "Tên cặp tiền (ví dụ XAUUSD). Nếu là UPDATE/CANCEL/CLOSE không nhắc tên, hãy ngầm hiểu là XAUUSD. Nếu hủy toàn bộ mọi cặp thì để null".
     "type": "BUY hoặc SELL. (Ví dụ 'hủy lệnh buy' -> action: CANCEL, type: BUY). Có thể null nếu áp dụng cho cả hai chiều".
-    "entry": Số thập phân cho giá vào lệnh (Nếu có nhiều giá, lấy giá đầu tiên. Nếu là tin UPDATE báo dời giá, ghi mức giá mới vào đây).
+    "entry1": Số thập phân cho giá vào lệnh 1 (Ví dụ Entry: 4292 4291 thì entry1 = 4292. Nếu chỉ có 1 giá thì lấy giá đó).
+    "entry2": Số thập phân cho giá vào lệnh 2 (Ví dụ Entry: 4292 4291 thì entry2 = 4291. Nếu chỉ có 1 giá thì lấy giống hệt entry1).
     "sl": Số thập phân cho Stop Loss (Nếu có cập nhật SL thì ghi, không thì null).
     "tp1": Số thập phân cho Take Profit 1.
     "tp2": Số thập phân cho Take Profit 2.
@@ -106,7 +107,8 @@ def parse_signal(message_text, current_price_info=""):
             'action': data.get('action', 'NEW').upper().strip(),
             'symbol': data.get('symbol').replace('#', '').strip() if data.get('symbol') else None,
             'type': str(data.get('type', '')).upper().strip() if data.get('type') else None,
-            'entry': float(data['entry']) if data.get('entry') else None,
+            'entry1': float(data['entry1']) if data.get('entry1') else None,
+            'entry2': float(data['entry2']) if data.get('entry2') else None,
             'sl': float(data['sl']) if data.get('sl') else None,
             'tp1': float(data['tp1']) if data.get('tp1') else None,
             'tp2': float(data['tp2']) if data.get('tp2') else None
@@ -208,15 +210,21 @@ def update_pending_orders(signal_data):
         if order.magic != MAGIC_NUMBER:
             continue
             
-        new_price = signal_data.get('entry') or order.price_open
+        new_price = order.price_open
         new_sl = signal_data.get('sl') or order.sl
         new_tp = order.tp
         
-        # Cập nhật TP đúng theo từng lệnh chia đôi
-        if "TP1" in order.comment and signal_data.get('tp1'):
-            new_tp = signal_data['tp1']
-        elif "TP2" in order.comment and signal_data.get('tp2'):
-            new_tp = signal_data['tp2']
+        # Cập nhật Entry và TP đúng theo từng lệnh chia đôi (TP1 và TP2)
+        if "TP1" in order.comment:
+            if signal_data.get('entry1'):
+                new_price = signal_data['entry1']
+            if signal_data.get('tp1'):
+                new_tp = signal_data['tp1']
+        elif "TP2" in order.comment:
+            if signal_data.get('entry2'):
+                new_price = signal_data['entry2']
+            if signal_data.get('tp2'):
+                new_tp = signal_data['tp2']
         
         request = {
             "action": mt5.TRADE_ACTION_MODIFY,
@@ -255,38 +263,35 @@ def execute_trade(signal_data):
 
     current_ask = tick.ask
     current_bid = tick.bid
-    entry_price = signal_data['entry']
-    
-    # TÍNH TOÁN LOẠI LỆNH
-    if signal_data['type'] == 'BUY':
-        if entry_price < current_ask:
-            order_type = mt5.ORDER_TYPE_BUY_LIMIT
-        elif entry_price > current_ask:
-            order_type = mt5.ORDER_TYPE_BUY_STOP
-        else:
-            order_type = mt5.ORDER_TYPE_BUY
-            
-    elif signal_data['type'] == 'SELL':
-        if entry_price > current_bid:
-            order_type = mt5.ORDER_TYPE_SELL_LIMIT
-        elif entry_price < current_bid:
-            order_type = mt5.ORDER_TYPE_SELL_STOP
-        else:
-            order_type = mt5.ORDER_TYPE_SELL
-    else:
-        return "⚠️ Không xác định được loại lệnh BUY/SELL."
-
     expiration = int(time.time()) + (PENDING_EXPIRATION_MINUTES * 60)
-    is_pending = order_type in (mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP, mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP)
-    action_type = mt5.TRADE_ACTION_PENDING if is_pending else mt5.TRADE_ACTION_DEAL
-
     logs = []
 
     # HÀM PHỤ ĐỂ GỬI TỪNG LỆNH (CHIA LỆNH)
-    def send_order(volume, tp_price, label):
-        if volume <= 0 or not tp_price:
+    def send_order(volume, entry_price, tp_price, label):
+        if volume <= 0 or not tp_price or not entry_price:
             return
             
+        # Xác định loại lệnh cho mức giá này
+        if signal_data['type'] == 'BUY':
+            if entry_price < current_ask:
+                order_type = mt5.ORDER_TYPE_BUY_LIMIT
+            elif entry_price > current_ask:
+                order_type = mt5.ORDER_TYPE_BUY_STOP
+            else:
+                order_type = mt5.ORDER_TYPE_BUY
+        elif signal_data['type'] == 'SELL':
+            if entry_price > current_bid:
+                order_type = mt5.ORDER_TYPE_SELL_LIMIT
+            elif entry_price < current_bid:
+                order_type = mt5.ORDER_TYPE_SELL_STOP
+            else:
+                order_type = mt5.ORDER_TYPE_SELL
+        else:
+            return
+            
+        is_pending = order_type in (mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP, mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP)
+        action_type = mt5.TRADE_ACTION_PENDING if is_pending else mt5.TRADE_ACTION_DEAL
+
         request = {
             "action": action_type,
             "symbol": symbol,
@@ -315,9 +320,9 @@ def execute_trade(signal_data):
         else:
             logs.append(f"✅ Đã đặt lệnh {mode_text} {label} ({volume} lot): {signal_data['type']} {symbol} tại {request['price']} - TP: {tp_price}")
 
-    # GỬI LỆNH LẦN LƯỢT CHO TP1 VÀ TP2
-    send_order(LOT_SIZE_TP1, signal_data['tp1'], "TP1")
-    send_order(LOT_SIZE_TP2, signal_data['tp2'], "TP2")
+    # GỬI LỆNH LẦN LƯỢT VỚI ENTRY VÀ TP RIÊNG
+    send_order(LOT_SIZE_TP1, signal_data.get('entry1'), signal_data.get('tp1'), "TP1")
+    send_order(LOT_SIZE_TP2, signal_data.get('entry2'), signal_data.get('tp2'), "TP2")
     
     return "\n".join(logs)
 
