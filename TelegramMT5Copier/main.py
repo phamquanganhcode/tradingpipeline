@@ -16,9 +16,16 @@ load_dotenv()
 API_ID = int(os.getenv("TELEGRAM_API_ID", 0))
 API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 PHONE_NUMBER = os.getenv("TELEGRAM_PHONE_NUMBER", "")
+
 CHANNEL_NAME = os.getenv("TELEGRAM_CHANNEL_NAME", "")
 if CHANNEL_NAME.lstrip('-').isdigit():
     CHANNEL_NAME = int(CHANNEL_NAME)
+
+NOTIFICATION_CHANNEL = os.getenv("TELEGRAM_NOTIFICATION_CHANNEL", "")
+if NOTIFICATION_CHANNEL.lstrip('-').isdigit():
+    NOTIFICATION_CHANNEL = int(NOTIFICATION_CHANNEL)
+else:
+    NOTIFICATION_CHANNEL = None
 
 # Cấu hình Lot chia đôi
 LOT_SIZE_TP1 = float(os.getenv("MT5_LOT_SIZE_TP1", 0.02))
@@ -109,11 +116,11 @@ def parse_signal(message_text, current_price_info=""):
         return None
 
 # ==========================================
-# CÁC HÀM XỬ LÝ LỆNH TRÊN MT5
+# CÁC HÀM XỬ LÝ LỆNH TRÊN MT5 (TRẢ VỀ STRING ĐỂ BÁO CÁO)
 # ==========================================
 def cancel_pending_orders(signal_data):
     if not connect_mt5():
-        return
+        return "⚠️ Không thể kết nối với MT5."
         
     symbol = signal_data.get('symbol')
     if symbol:
@@ -123,10 +130,10 @@ def cancel_pending_orders(signal_data):
         orders = mt5.orders_get()
         
     if not orders:
-        print("Không có lệnh CHỜ nào để hủy.")
-        return
+        return "⚠️ Không có lệnh CHỜ nào để hủy."
         
     target_type = signal_data.get('type')
+    logs = []
     
     for order in orders:
         if order.magic != MAGIC_NUMBER:
@@ -144,13 +151,15 @@ def cancel_pending_orders(signal_data):
         
         result = mt5.order_send(request)
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            print(f"Lỗi hủy lệnh {order.ticket}: {result.retcode}")
+            logs.append(f"❌ Lỗi hủy lệnh {order.ticket}: {result.retcode}")
         else:
-            print(f"Đã HỦY lệnh chờ {order.ticket} thành công theo yêu cầu từ Telegram.")
+            logs.append(f"✅ Đã HỦY lệnh chờ {order.ticket} thành công.")
+            
+    return "\n".join(logs) if logs else "⚠️ Không có lệnh chờ nào khớp yêu cầu để hủy."
 
 def close_open_positions_by_signal(signal_data):
     if not connect_mt5():
-        return
+        return "⚠️ Không thể kết nối với MT5."
         
     symbol = signal_data.get('symbol')
     if symbol:
@@ -160,10 +169,10 @@ def close_open_positions_by_signal(signal_data):
         positions = mt5.positions_get()
         
     if not positions:
-        print("Không có lệnh ĐANG MỞ nào để đóng.")
-        return
+        return "⚠️ Không có lệnh ĐANG MỞ nào để đóng."
         
     target_type = signal_data.get('type')
+    logs = []
     
     for pos in positions:
         if pos.magic != MAGIC_NUMBER:
@@ -174,23 +183,27 @@ def close_open_positions_by_signal(signal_data):
         if target_type == 'SELL' and pos.type != mt5.ORDER_TYPE_SELL:
             continue
             
-        close_position(pos)
-        print(f"Đã ĐÓNG TAY lệnh {pos.ticket} theo yêu cầu từ Telegram.")
+        res = close_position(pos, comment="Closed via Telegram")
+        if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+            logs.append(f"✅ Đã ĐÓNG TAY lệnh {pos.ticket}.")
+        else:
+            logs.append(f"❌ Lỗi đóng lệnh {pos.ticket}.")
+            
+    return "\n".join(logs) if logs else "⚠️ Không có lệnh đang mở nào khớp yêu cầu để đóng."
 
 def update_pending_orders(signal_data):
     if not signal_data.get('symbol'):
-        return
+        return "⚠️ Không xác định được cặp tiền để cập nhật."
     symbol = signal_data['symbol'] + SYMBOL_SUFFIX
     
     if not connect_mt5():
-        print(f"Không thể kết nối với MT5. Lỗi: {mt5.last_error()}")
-        return
+        return "⚠️ Không thể kết nối với MT5."
         
     orders = mt5.orders_get(symbol=symbol)
     if not orders:
-        print(f"Không tìm thấy lệnh chờ (Pending Order) nào cho cặp {symbol} để cập nhật.")
-        return
+        return f"⚠️ Không tìm thấy lệnh chờ nào cho cặp {symbol} để cập nhật."
         
+    logs = []
     for order in orders:
         if order.magic != MAGIC_NUMBER:
             continue
@@ -218,28 +231,27 @@ def update_pending_orders(signal_data):
         
         result = mt5.order_send(request)
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            print(f"Lỗi cập nhật lệnh {order.ticket}: {result.retcode} - {result.comment}")
+            logs.append(f"❌ Lỗi cập nhật lệnh {order.ticket}: {result.comment}")
         else:
-            print(f"Đã cập nhật lệnh chờ {order.ticket} thành công! Entry: {new_price} | SL: {new_sl} | TP: {new_tp}")
+            logs.append(f"✅ Đã cập nhật lệnh chờ {order.ticket}! Entry: {new_price} | SL: {new_sl} | TP: {new_tp}")
+            
+    return "\n".join(logs) if logs else "⚠️ Không có lệnh chờ hợp lệ để cập nhật."
 
 
 def execute_trade(signal_data):
     if not signal_data.get('symbol'):
-        return
+        return "⚠️ Lỗi: Không xác định được cặp tiền."
     symbol = signal_data['symbol'] + SYMBOL_SUFFIX
     
     if not connect_mt5():
-        print(f"Không thể kết nối với MT5. Lỗi: {mt5.last_error()}")
-        return
+        return "⚠️ Không thể kết nối với MT5."
         
     if not mt5.symbol_select(symbol, True):
-        print(f"Không tìm thấy cặp {symbol} trong MT5")
-        return
+        return f"⚠️ Không tìm thấy cặp {symbol} trong MT5"
 
     tick = mt5.symbol_info_tick(symbol)
     if tick is None:
-        print("Lỗi: Không lấy được giá hiện tại.")
-        return
+        return "⚠️ Lỗi: Không lấy được giá hiện tại."
 
     current_ask = tick.ask
     current_bid = tick.bid
@@ -262,11 +274,13 @@ def execute_trade(signal_data):
         else:
             order_type = mt5.ORDER_TYPE_SELL
     else:
-        return
+        return "⚠️ Không xác định được loại lệnh BUY/SELL."
 
     expiration = int(time.time()) + (PENDING_EXPIRATION_MINUTES * 60)
     is_pending = order_type in (mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP, mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP)
     action_type = mt5.TRADE_ACTION_PENDING if is_pending else mt5.TRADE_ACTION_DEAL
+
+    logs = []
 
     # HÀM PHỤ ĐỂ GỬI TỪNG LỆNH (CHIA LỆNH)
     def send_order(volume, tp_price, label):
@@ -295,21 +309,23 @@ def execute_trade(signal_data):
             request["price"] = current_ask if signal_data['type'] == 'BUY' else current_bid
 
         result = mt5.order_send(request)
+        mode_text = "CHỜ" if is_pending else "MARKET"
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            print(f"Lỗi đặt lệnh {label}: {result.retcode} - {result.comment}")
+            logs.append(f"❌ Lỗi đặt lệnh {label}: {result.retcode} - {result.comment}")
         else:
-            mode_text = "CHO" if is_pending else "MARKET"
-            print(f"Da dat lenh {mode_text} {label} ({volume} lot): {signal_data['type']} {symbol} tai {request['price']} - TP: {tp_price}")
+            logs.append(f"✅ Đã đặt lệnh {mode_text} {label} ({volume} lot): {signal_data['type']} {symbol} tại {request['price']} - TP: {tp_price}")
 
     # GỬI LỆNH LẦN LƯỢT CHO TP1 VÀ TP2
     send_order(LOT_SIZE_TP1, signal_data['tp1'], "TP1")
     send_order(LOT_SIZE_TP2, signal_data['tp2'], "TP2")
+    
+    return "\n".join(logs)
 
 
-def close_position(position):
+def close_position(position, comment="Auto Close"):
     tick = mt5.symbol_info_tick(position.symbol)
     if not tick:
-        return
+        return None
     
     if position.type == mt5.ORDER_TYPE_BUY:
         order_type = mt5.ORDER_TYPE_SELL
@@ -318,7 +334,7 @@ def close_position(position):
         order_type = mt5.ORDER_TYPE_BUY
         price = tick.ask
     else:
-        return
+        return None
 
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
@@ -329,17 +345,13 @@ def close_position(position):
         "price": price,
         "deviation": 20,
         "magic": MAGIC_NUMBER,
-        "comment": "Auto Close",
+        "comment": comment,
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_IOC,
     }
-    result = mt5.order_send(request)
-    if result.retcode != mt5.TRADE_RETCODE_DONE:
-        print(f"Lỗi tự động đóng lệnh {position.ticket}: {result.retcode} - {result.comment}")
-    else:
-        pass # In log ở chỗ gọi hàm
+    return mt5.order_send(request)
 
-async def trade_manager_loop():
+async def trade_manager_loop(client):
     print(f"Đã kích hoạt hệ thống Quản Lý Lệnh (Tuần tra tự đóng lệnh sau {MAX_TRADE_DURATION_MINUTES} phút).")
     while True:
         try:
@@ -351,8 +363,14 @@ async def trade_manager_loop():
                         duration = current_time - pos.time
                         if duration >= (MAX_TRADE_DURATION_MINUTES * 60):
                             print(f"\nPhát hiện lệnh {pos.ticket} đã mở quá {MAX_TRADE_DURATION_MINUTES} phút. Đang xử lý đóng lệnh...")
-                            close_position(pos)
-                            print(f"Đã TỰ ĐỘNG ĐÓNG lệnh {pos.ticket} (lãi/lỗ: {pos.profit}$) do quá thời gian.")
+                            result = close_position(pos, comment=f"Close > {MAX_TRADE_DURATION_MINUTES}m")
+                            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                                msg = f"⏳ TỰ ĐỘNG ĐÓNG lệnh {pos.ticket} (lãi/lỗ: {pos.profit}$) do quá thời gian."
+                                print(msg)
+                                if NOTIFICATION_CHANNEL:
+                                    await client.send_message(NOTIFICATION_CHANNEL, f"🤖 **BOT REPORT:**\n{msg}")
+                            else:
+                                print(f"Lỗi đóng lệnh tự động: {result.comment}")
         except Exception as e:
             print(f"Lỗi hệ thống quản lý lệnh: {e}")
             
@@ -360,12 +378,8 @@ async def trade_manager_loop():
 
 client = TelegramClient('session_name', API_ID, API_HASH)
 
-@client.on(events.NewMessage(chats=CHANNEL_NAME))
-async def handler(event):
-    message_text = event.message.text
-    print("\n--- NHẬN ĐƯỢC TIN NHẮN MỚI ---")
+async def handle_signal_processing(message_text):
     print(message_text)
-    
     current_price_info = ""
     if connect_mt5():
         tick = mt5.symbol_info_tick("XAUUSD" + SYMBOL_SUFFIX)
@@ -374,37 +388,36 @@ async def handler(event):
             
     signal_data = parse_signal(message_text, current_price_info)
     
+    result_msg = ""
     if signal_data:
         print(f"Đã phân tích tín hiệu AI: {signal_data}")
         action = signal_data.get('action')
         
         if action == 'UPDATE':
-            update_pending_orders(signal_data)
+            result_msg = update_pending_orders(signal_data)
         elif action == 'CANCEL':
-            cancel_pending_orders(signal_data)
+            result_msg = cancel_pending_orders(signal_data)
         elif action == 'CLOSE':
-            close_open_positions_by_signal(signal_data)
+            result_msg = close_open_positions_by_signal(signal_data)
         else:
-            execute_trade(signal_data)
+            result_msg = execute_trade(signal_data)
+            
+        print(result_msg)
+        if result_msg and NOTIFICATION_CHANNEL:
+            try:
+                await client.send_message(NOTIFICATION_CHANNEL, f"🤖 **BOT REPORT:**\n{result_msg}")
+            except Exception as e:
+                print(f"Không thể gửi tin báo cáo tới Telegram: {e}")
+
+@client.on(events.NewMessage(chats=CHANNEL_NAME))
+async def handler(event):
+    print("\n--- NHẬN ĐƯỢC TIN NHẮN MỚI ---")
+    await handle_signal_processing(event.message.text)
 
 @client.on(events.MessageEdited(chats=CHANNEL_NAME))
 async def edit_handler(event):
-    message_text = event.message.text
     print("\n--- PHÁT HIỆN TIN NHẮN BỊ CHỈNH SỬA ---")
-    print(message_text)
-    
-    current_price_info = ""
-    if connect_mt5():
-        tick = mt5.symbol_info_tick("XAUUSD" + SYMBOL_SUFFIX)
-        if tick:
-            current_price_info = f"GỢI Ý: Giá XAUUSD hiện tại trên thị trường đang là {tick.ask}."
-            
-    signal_data = parse_signal(message_text, current_price_info)
-    
-    if signal_data:
-        print(f"Đã phân tích tín hiệu AI (từ Edit): {signal_data}")
-        # Bất kể là NEW hay gì, hễ tin nhắn bị edit thì ta mang đi cập nhật lệnh chờ
-        update_pending_orders(signal_data)
+    await handle_signal_processing(event.message.text)
 
 async def main():
     print("Đang khởi động Bot...")
@@ -417,10 +430,13 @@ async def main():
         print("Lỗi: Vui lòng cấu hình TELEGRAM_API_ID và TELEGRAM_API_HASH trong file .env")
         return
 
-    asyncio.create_task(trade_manager_loop())
+    asyncio.create_task(trade_manager_loop(client))
 
     await client.start(phone=PHONE_NUMBER)
-    print(f"Đang lắng nghe tin nhắn từ kênh: {CHANNEL_NAME}...")
+    print(f"Đang lắng nghe tín hiệu từ kênh: {CHANNEL_NAME}")
+    if NOTIFICATION_CHANNEL:
+        print(f"Sẽ gửi báo cáo tự động tới kênh: {NOTIFICATION_CHANNEL}")
+        
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
