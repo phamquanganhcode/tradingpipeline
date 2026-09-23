@@ -49,10 +49,6 @@ def connect_mt5():
 # HÀM PHÂN TÍCH TIN NHẮN (BẰNG GEMINI AI)
 # ==========================================
 def parse_signal(message_text):
-    if "(*) Signal BOT AI" not in message_text:
-        print("-> Bỏ qua tin nhắn vì không phải tín hiệu gốc (thiếu chữ '(*) Signal BOT AI').")
-        return None
-        
     ignore_keywords = ['hit', 'pips', 'profit', 'running', 'closed', 'win', 'loss']
     if any(keyword in message_text.lower() for keyword in ignore_keywords):
         print("-> Đã chặn một tin nhắn báo cáo kết quả.")
@@ -69,11 +65,11 @@ def parse_signal(message_text):
     
     Các trường cần có:
     "symbol": "Tên cặp tiền (ví dụ XAUUSD)",
-    "type": "BUY hoặc SELL",
-    "entry": Số thập phân cho giá vào lệnh (Nếu có 2 giá, hãy lấy mức giá đầu tiên),
+    "type": "BUY hoặc SELL. (Nếu text ghi Lệnh: WAIT nhưng có chữ Sell Limit/Sell Breakout thì trả về SELL. Nếu SL cao hơn Entry thì là SELL, SL thấp hơn Entry thì là BUY)",
+    "entry": Số thập phân cho giá vào lệnh (Nếu có nhiều giá, lấy giá đầu tiên),
     "sl": Số thập phân cho Stop Loss,
-    "tp1": Số thập phân cho Take Profit 1,
-    "tp2": Số thập phân cho Take Profit 2 (Nếu không có, hãy để null hoặc 0)
+    "tp1": Số thập phân cho Take Profit 1 (giá TP đầu tiên),
+    "tp2": Số thập phân cho Take Profit 2 (giá TP thứ hai, nếu không có để 0)
     
     Tin nhắn:
     {message_text}
