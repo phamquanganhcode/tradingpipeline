@@ -301,6 +301,17 @@ def execute_trade(signal_data):
             return
             
         is_pending = order_type in (mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP, mt5.ORDER_TYPE_SELL_LIMIT, mt5.ORDER_TYPE_SELL_STOP)
+
+        # --- KIỂM TRA TRÙNG LẶP ĐỂ TRÁNH ĐẶT LỆNH NHIỀU LẦN KHI TIN NHẮN BỊ EDIT ---
+        if is_pending:
+            existing_orders = mt5.orders_get(symbol=symbol)
+            if existing_orders:
+                for ord in existing_orders:
+                    if ord.magic == MAGIC_NUMBER and ord.type == order_type and abs(ord.price_open - entry_price) < 0.00001 and label in ord.comment:
+                        logs.append(f"⚠️ Bỏ qua lệnh {label}: Đã tồn tại lệnh chờ {signal_data['type']} tại giá {entry_price}")
+                        return
+        # --------------------------------------------------------------------------
+
         action_type = mt5.TRADE_ACTION_PENDING if is_pending else mt5.TRADE_ACTION_DEAL
 
         request = {
