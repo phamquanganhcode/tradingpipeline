@@ -3,7 +3,7 @@ import re
 import json
 import time
 import asyncio
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 import MetaTrader5 as mt5
@@ -39,8 +39,9 @@ MT5_PASSWORD = os.getenv("MT5_PASSWORD", "")
 MT5_SERVER = os.getenv("MT5_SERVER", "")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+genai_client = None
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ==========================================
 # HÀM KẾT NỐI MT5
@@ -72,7 +73,7 @@ def parse_signal(message_text, current_price_info=""):
     prompt = f"""
     Bạn là một hệ thống phân tích tín hiệu Forex. Hãy đọc tin nhắn dưới đây và trích xuất thông tin.
     {current_price_info}
-    LƯU Ý QUAN TRỌNG: Nếu tin nhắn báo dời giá, hạ giá mà chỉ nói 2 chữ số cuối (ví dụ "hạ xuống 35", "dời về 38"), bạn BẮT BUỘC phải ghép nó với đầu số của giá hiện tại để ra giá thực tế (ví dụ giá hiện tại là 4339, báo về 38 thì kết quả phải là 4338.0). Tuyệt đối không trả về số 38.0.
+    LƯU Ý QUAN TRỌNG: Nếu tin nhắn báo dời giá, hạ giá mà chỉ nói 2 hoặc 3 chữ số cuối (ví dụ "hạ xuống 35", "dời về 295"), bạn BẮT BUỘC phải ghép nó với đầu số của giá hiện tại để ra giá thực tế (ví dụ giá hiện tại là 4279, báo về 295 thì kết quả phải là 4295.0). Tuyệt đối không trả về 4229.5 hay số nhỏ vô lý.
     
     LƯU Ý: Trả về CHỈ một đoạn JSON chuẩn (không markdown).
     Nếu tin nhắn không phải là tín hiệu hoặc lệnh điều khiển, trả về JSON rỗng {{}}.
@@ -92,14 +93,18 @@ def parse_signal(message_text, current_price_info=""):
     """
     try:
         try:
-            model = genai.GenerativeModel('gemini-3.1-flash-lite')
-            response = model.generate_content(prompt)
+            response = genai_client.models.generate_content(
+                model='gemini-3.1-flash-lite',
+                contents=prompt
+            )
         except Exception as api_e:
             error_msg = str(api_e).lower()
             if '429' in error_msg or 'quota' in error_msg:
                 print("-> Hết hạn ngạch (Rate Limit) của model 3.1! Tự động chuyển sang model dự phòng: gemini-3.5-flash-lite...")
-                model_fallback = genai.GenerativeModel('gemini-3.5-flash-lite')
-                response = model_fallback.generate_content(prompt)
+                response = genai_client.models.generate_content(
+                    model='gemini-3.5-flash-lite',
+                    contents=prompt
+                )
             else:
                 raise api_e
                 
@@ -408,15 +413,38 @@ async def handle_signal_processing(message_text):
             except Exception as e:
                 print(f"Không thể gửi tin báo cáo tới Telegram: {e}")
 
+message_text_cache = {}
+
+async def process_event(event, event_type):
+    msg_id = event.message.id
+    msg_text = event.message.text
+    
+    if not msg_text:
+        return
+        
+    if event_type == "EDIT":
+        if message_text_cache.get(msg_id) == msg_text:
+            print("-> Bỏ qua vì nội dung text không thay đổi.")
+            return
+            
+    message_text_cache[msg_id] = msg_text
+    
+    if len(message_text_cache) > 1000:
+        keys_to_remove = list(message_text_cache.keys())[:100]
+        for k in keys_to_remove:
+            del message_text_cache[k]
+            
+    await handle_signal_processing(msg_text)
+
 @client.on(events.NewMessage(chats=CHANNEL_NAME))
 async def handler(event):
     print("\n--- NHẬN ĐƯỢC TIN NHẮN MỚI ---")
-    await handle_signal_processing(event.message.text)
+    await process_event(event, "NEW")
 
 @client.on(events.MessageEdited(chats=CHANNEL_NAME))
 async def edit_handler(event):
     print("\n--- PHÁT HIỆN TIN NHẮN BỊ CHỈNH SỬA ---")
-    await handle_signal_processing(event.message.text)
+    await process_event(event, "EDIT")
 
 async def main():
     print("Đang khởi động Bot...")
