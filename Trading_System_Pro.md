@@ -1,3 +1,6 @@
+Hãy mở file Trading_System_Pro.md ra và đọc lại quy tắc trước khi phân tích kèo này cho tôi
+
+
 # 🏛️ HỆ THỐNG GIAO DỊCH PRO: PRICE ACTION + EMA 20/50 + BOLLINGER BANDS (BẢN 10/10)
 
 Hệ thống giao dịch thuận xu hướng dựa trên sự kết hợp giữa Cấu trúc thị trường, Động lượng (EMA), Biến động (Bollinger Bands) và Hành vi giá (Price Action).
@@ -39,10 +42,10 @@ Hệ thống giao dịch thuận xu hướng dựa trên sự kết hợp giữa
 
 Chỉ vào lệnh khi thỏa mãn ĐỦ 5 bước sau:
 
-- [ ] **1. Kiểm tra Cấu trúc:** Giá đang tạo cấu trúc Higher Highs (HH) & Higher Lows (HL).
+- [ ] **1. Kiểm tra Cấu trúc & Đa khung thời gian (MTF):** Khung hiện tại đang tạo cấu trúc Higher Highs (HH) & Higher Lows (HL). BẮT BUỘC: Khung thời gian lớn hơn (ví dụ H1 nếu đang đánh M15) KHÔNG bị gãy cấu trúc tăng và KHÔNG nằm tại vùng Kháng cự mạnh.
 - [ ] **2. Xác nhận Xu hướng:** Giá nằm trên EMA 50; EMA 20 nằm trên EMA 50 và dải BB đang mở rộng dốc lên.
 - [ ] **3. Chờ Pullback (Điều chỉnh):** Kiên nhẫn chờ giá điều chỉnh giảm về Vùng giá trị (nằm giữa EMA 20, Middle Band và EMA 50).
-- [ ] **4. Kích hoạt (Trigger):** Xuất hiện nến Price Action đẹp tại vùng giá trị (Bullish Pin Bar đuôi dưới dài hoặc Bullish Engulfing). Vào lệnh ngay khi nến đóng cửa.
+- [ ] **4. Kích hoạt (Trigger) & Bộ lọc Xung lực:** Xuất hiện nến Price Action đẹp tại vùng giá trị (Bullish Pin Bar đuôi dưới dài hoặc Bullish Engulfing). BẮT BUỘC: KHÔNG có Phân kỳ giảm giá trên RSI (14). Vào lệnh ngay khi nến đóng cửa.
 - [ ] **5. Tính toán SL/TP:**
     *   **Stop Loss (SL):** Đặt dưới râu nến tín hiệu + 1x giá trị ATR hiện tại, *hoặc* đặt dưới Swing Low (đáy) gần nhất.
     *   **Take Profit 1 (TP1):** Chốt lời 1/2 vị thế tại dải trên của Bollinger Bands (Upper Band) hoặc Đỉnh cũ gần nhất.
@@ -54,10 +57,10 @@ Chỉ vào lệnh khi thỏa mãn ĐỦ 5 bước sau:
 
 Chỉ vào lệnh khi thỏa mãn ĐỦ 5 bước sau:
 
-- [ ] **1. Kiểm tra Cấu trúc:** Giá đang tạo cấu trúc Lower Highs (LH) & Lower Lows (LL).
+- [ ] **1. Kiểm tra Cấu trúc & Đa khung thời gian (MTF):** Khung hiện tại đang tạo cấu trúc Lower Highs (LH) & Lower Lows (LL). BẮT BUỘC: Khung thời gian lớn hơn (ví dụ H1 nếu đang đánh M15) KHÔNG bị gãy cấu trúc giảm và KHÔNG nằm tại vùng Hỗ trợ mạnh.
 - [ ] **2. Xác nhận Xu hướng:** Giá nằm dưới EMA 50; EMA 20 nằm dưới EMA 50 và dải BB đang mở rộng dốc xuống.
 - [ ] **3. Chờ Pullback (Điều chỉnh):** Kiên nhẫn chờ giá điều chỉnh tăng về Vùng giá trị (nằm giữa EMA 20, Middle Band và EMA 50).
-- [ ] **4. Kích hoạt (Trigger):** Xuất hiện nến Price Action đẹp tại vùng giá trị (Bearish Pin Bar đuôi trên dài hoặc Bearish Engulfing). Vào lệnh ngay khi nến đóng cửa.
+- [ ] **4. Kích hoạt (Trigger) & Bộ lọc Xung lực:** Xuất hiện nến Price Action đẹp tại vùng giá trị (Bearish Pin Bar đuôi trên dài hoặc Bearish Engulfing). BẮT BUỘC: KHÔNG có Phân kỳ tăng giá trên RSI (14). Vào lệnh ngay khi nến đóng cửa.
 - [ ] **5. Tính toán SL/TP:**
     *   **Stop Loss (SL):** Đặt trên râu nến tín hiệu + 1x giá trị ATR hiện tại, *hoặc* đặt trên Swing High (đỉnh) gần nhất.
     *   **Take Profit 1 (TP1):** Chốt lời 1/2 vị thế tại dải dưới của Bollinger Bands (Lower Band) hoặc Đáy cũ gần nhất.
@@ -68,8 +71,8 @@ Chỉ vào lệnh khi thỏa mãn ĐỦ 5 bước sau:
 ### ⚡ STRATEGY 3: Đột phá dải co thắt (Bollinger Squeeze Breakout)
 
 *   **Bối cảnh:** Hai dải Bollinger co thắt rất hẹp (Squeeze), EMA 20 và 50 đi ngang. Thị trường đang tích lũy nén.
-*   **Điểm vào lệnh (ENTRY):** Vào lệnh khi có một cây nến xung lực thân rất lớn (Marubozu) phá vỡ bùng nổ và **đóng cửa hoàn toàn bên ngoài** dải BB, đồng thời kéo EMA dốc theo hướng phá vỡ.
-*   **Stop Loss (SL):** Đặt tại đường trục giữa (Middle Band/SMA 20) hoặc phía bên kia của vùng tích lũy.
+*   **Điểm vào lệnh (ENTRY - Xác nhận kép):** KHÔNG FOMO VÀO LỆNH NGAY KHI PHÁ VỠ. Chờ một cây nến xung lực phá vỡ hoàn toàn dải BB và kéo EMA dốc theo. Sau đó, chờ giá quay lại kiểm tra (Re-test) dải BB vừa vỡ hoặc EMA 20 và xuất hiện nến từ chối (rút râu). BẮT BUỘC: Cú phá vỡ ban đầu phải đi kèm cột Volume cao đột biến (gấp 1.5 - 2 lần trung bình).
+*   **Stop Loss (SL):** Đặt dưới/trên râu nến Re-test hoặc tại đường trục giữa (Middle Band/SMA 20).
 *   **Take Profit (TP):** Dùng Trailing Stop bám theo EMA 20 cho đến khi sóng bùng nổ kết thúc và có dấu hiệu đảo chiều.
 
 ---
@@ -83,6 +86,9 @@ Chỉ vào lệnh khi thỏa mãn ĐỦ 5 bước sau:
 2.  **Tỷ lệ Risk:Reward (R:R):** Đảm bảo lợi nhuận kỳ vọng tối thiểu đạt mức **1:1.5** hoặc **1:2** trước khi quyết định bóp cò. Nếu SL quá xa khiến TP1 không đạt được tỷ lệ này, hãy bỏ qua setup đó.
 3.  **Tin tức vĩ mô:** Đóng các lệnh lướt sóng hoặc ngưng vào lệnh mới trong khoảng 30 phút trước và sau khi công bố các tin tức kinh tế quan trọng (NFP, CPI, Lãi suất FED...).
 4.  **Kiểm chứng (Backtest):** Luôn backtest tối thiểu 100 lệnh trên quá khứ trước khi giao dịch bằng tiền thật để rèn luyện sự nhạy bén và xác lập niềm tin vào hệ thống.
+5.  **Giới hạn Cắt lỗ Tối đa/Ngày (Max Daily Loss):** Ngừng giao dịch ngay lập tức nếu tổng lỗ trong ngày chạm mốc **3% - 4%** tài khoản (Tương đương 2-3 lệnh thua liên tiếp). Đây là chiếc "cầu dao tự động" giúp ngăn chặn tâm lý giao dịch trả thù (Revenge Trading) và tránh chuỗi thua lỗ khi thị trường nhiễu loạn.
+6.  **Giới hạn Lợi nhuận/Ngày (Daily Target):** Khi lợi nhuận trong ngày đạt mốc **3% - 5%** tài khoản, **NGỪNG MỞ LỆNH MỚI** (chỉ tiếp tục giữ/quản lý các lệnh đang chạy dở). Quy tắc này giúp bảo vệ thành quả và ngăn chặn sự hưng phấn thái quá (Euphoria) xúi giục Overtrading.
+7.  **Giới hạn Vị thế Đồng thời (Max Open Positions):** Chỉ giữ tối đa **2 - 3 lệnh** đang chạy cùng một thời điểm. Việc mở quá nhiều lệnh dễ dẫn đến rủi ro tương quan tiền tệ (Correlation Risk), gây thiệt hại hàng loạt nếu có tin tức bất ngờ.
 
 ---
 
@@ -118,6 +124,6 @@ Thay vì dùng khung H4/D1 làm chủ đạo (vốn mất 1–3 ngày để cán
     *   Không nên vào lệnh buổi sáng (Phiên Á - giá thường đi ngang sideway).
     *   **Tập trung 100% năng lượng vào Phiên Mỹ (19h30 – 22h30 giờ VN):** Đây là lúc thị trường Bạc/Vàng có thanh khoản khổng lồ và lực sóng biến động mạnh nhất, giúp lệnh chạm TP1/TP2 nhanh nhất.
 *   **Khối lượng đi lệnh gọn nhẹ:**
-    *   Khi đánh trong ngày trên tài khoản Cent (~39,000 USC), nên giữ khối lượng 0.05 – 0.10 lot Cent cho Bạc hoặc 0.01 – 0.02 lot Cent cho Vàng để khi dính SL ngắn, tài khoản chỉ lỗ nhẹ từ 0.5% – 1%.
+    *   Khi đánh trong ngày trên tài khoản Cent (~40,000 USC), nên giữ khối lượng 0.05 – 0.10 lot Cent cho Bạc hoặc 0.01 – 0.02 lot Cent cho Vàng để khi dính SL ngắn, tài khoản chỉ lỗ nhẹ từ 0.5% – 1%.
 *   **Kỷ luật ngắt đao (Hard Stop):**
     *   Đặt quy tắc: Nếu trong ngày đã đạt mục tiêu lợi nhuận (ví dụ +1,000 đến +1,500 USC) hoặc chạm tối đa 2 lệnh SL liên tiếp, đóng máy nghỉ trading để bảo toàn vốn và tâm lý.
